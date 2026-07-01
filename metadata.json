@@ -1,0 +1,6 @@
+{
+  "name": "Hand Cricket League",
+  "description": "The official dashboard and digital arena for schoolyard Hand Cricket, featuring tournament schedules, real-time points tables, player stats (Orange & Purple Caps), and an interactive digital game.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,46 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Rubik:wght@400;500;600;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Rubik", sans-serif;
+  --font-mono: "Space Grotesk", monospace;
+  
+  --color-primary: #f97316;
+  --color-primary-container: #ea580c;
+  --color-on-primary-container: #ffffff;
+  --color-secondary: #a855f7;
+  --color-secondary-container: #161d2f;
+  --color-on-secondary-container: #f3e8ff;
+  --color-tertiary: #a855f7;
+  --color-tertiary-container: #2e1065;
+  --color-surface-container: #1a2238;
+}
+
+/* Custom scrollbars and styling */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes bounce-subtle {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.animate-bounce-subtle {
+  animation: bounce-subtle 2s infinite ease-in-out;
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-10px) rotate(1deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
+}
+
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}

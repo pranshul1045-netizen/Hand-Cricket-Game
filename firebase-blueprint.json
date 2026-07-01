@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile containing schoolyard preferences and roles",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "photoURL": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "battingStyle": { "type": "string", "enum": ["Right-handed", "Left-handed"] },
+        "favoriteNumber": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["displayName", "role", "createdAt"]
+    },
+    "SchoolMatch": {
+      "title": "SchoolMatch",
+      "description": "Real-life Hand Cricket League school match scores",
+      "type": "object",
+      "properties": {
+        "player1": { "type": "string" },
+        "player2": { "type": "string" },
+        "player1Runs": { "type": "integer" },
+        "player2Runs": { "type": "integer" },
+        "player1Balls": { "type": "integer" },
+        "player2Balls": { "type": "integer" },
+        "player1Conceded": { "type": "integer" },
+        "player2Conceded": { "type": "integer" },
+        "winner": { "type": "string" },
+        "status": { "type": "string", "enum": ["completed", "scheduled"] },
+        "date": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["player1", "player2", "player1Runs", "player2Runs", "status", "creatorId", "createdAt"]
+    },
+    "DigitalMatch": {
+      "title": "DigitalMatch",
+      "description": "Digital HCL matches played inside the app",
+      "type": "object",
+      "properties": {
+        "playerUid": { "type": "string" },
+        "playerName": { "type": "string" },
+        "opponentName": { "type": "string" },
+        "playerRuns": { "type": "integer" },
+        "opponentRuns": { "type": "integer" },
+        "winner": { "type": "string", "enum": ["player", "opponent"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["playerUid", "playerName", "opponentName", "playerRuns", "opponentRuns", "winner", "createdAt"]
+    },
+    "PlayerStanding": {
+      "title": "PlayerStanding",
+      "description": "Aggregated leaderboard stats for HCL school league",
+      "type": "object",
+      "properties": {
+        "playerName": { "type": "string" },
+        "matchesPlayed": { "type": "integer" },
+        "matchesWon": { "type": "integer" },
+        "matchesLost": { "type": "integer" },
+        "totalRunsScored": { "type": "integer" },
+        "totalRunsConceded": { "type": "integer" },
+        "points": { "type": "integer" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["playerName", "matchesPlayed", "matchesWon", "matchesLost", "totalRunsScored", "totalRunsConceded", "points", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User account detail"
+    },
+    "/schoolMatches/{matchId}": {
+      "schema": "SchoolMatch",
+      "description": "Official school match scorecards and fixtures"
+    },
+    "/digitalMatches/{matchId}": {
+      "schema": "DigitalMatch",
+      "description": "Matches played inside the app against CPU/PvP"
+    },
+    "/standings/{standingId}": {
+      "schema": "PlayerStanding",
+      "description": "Player league standings"
+    }
+  }
+}
