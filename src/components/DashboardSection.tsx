@@ -4,6 +4,34 @@ import { db, auth } from '../firebase';
 import { doc, setDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore';
 import { UserProfile, SchoolMatch, PlayerStanding } from '../types';
 
+const AVATAR_PRESETS = [
+  { name: 'Red Cap', url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Blue Bowler', url: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Green Athlete', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Gold Captain', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Cricket Star', url: 'https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Youth Batter', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Sport Pro', url: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=120&h=120&q=80' },
+  { name: 'Cricket Fan', url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=120&h=120&q=80' },
+];
+
+const getGradientByName = (name: string) => {
+  const gradients = [
+    'from-pink-500 to-rose-500',
+    'from-amber-500 to-orange-600',
+    'from-emerald-400 to-teal-600',
+    'from-blue-500 to-indigo-600',
+    'from-violet-500 to-purple-600',
+    'from-fuchsia-500 to-pink-600',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % gradients.length;
+  return gradients[index];
+};
+
 interface DashboardSectionProps {
   userProfile: UserProfile | null;
   schoolMatches: SchoolMatch[];
@@ -17,6 +45,79 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
   const [battingStyle, setBattingStyle] = useState<'Right-handed' | 'Left-handed'>('Right-handed');
   const [favoriteNumber, setFavoriteNumber] = useState<number>(6);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Player Profile Photo States
+  const [playerProfiles, setPlayerProfiles] = useState<Record<string, string>>({});
+  const [selectedPlayerForPhoto, setSelectedPlayerForPhoto] = useState('');
+  const [customPlayerName, setCustomPlayerName] = useState('');
+  const [customPlayerPhotoURL, setCustomPlayerPhotoURL] = useState('');
+  const [isSavingPhoto, setIsSavingPhoto] = useState(false);
+
+  // Detect isAdmin
+  const isAdmin = 
+    auth.currentUser?.email === 'pranshul1045@gmail.com' || 
+    auth.currentUser?.email === 'pranshul1045@gamil.com' || 
+    auth.currentUser?.uid === 'admin_local' || 
+    userProfile?.role === 'admin';
+
+  useEffect(() => {
+    // Real-time subscribe to custom player profiles
+    const unsub = onSnapshot(collection(db, 'playerProfiles'), (snapshot) => {
+      const profiles: Record<string, string> = {};
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.photoURL) {
+          profiles[docSnap.id] = data.photoURL; // doc.id is lowercased name
+        }
+      });
+      setPlayerProfiles(profiles);
+    }, (err) => {
+      console.error("Error loading player profiles:", err);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleSavePlayerPhoto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPlayerForPhoto) return;
+    
+    let targetName = selectedPlayerForPhoto;
+    if (selectedPlayerForPhoto === 'new_custom') {
+      if (!customPlayerName.trim()) return;
+      targetName = customPlayerName.trim();
+    }
+
+    setIsSavingPhoto(true);
+    try {
+      const docId = targetName.toLowerCase();
+      await setDoc(doc(db, 'playerProfiles', docId), {
+        name: targetName,
+        photoURL: customPlayerPhotoURL.trim(),
+        updatedAt: new Date().toISOString()
+      });
+      
+      if (selectedPlayerForPhoto === 'new_custom') {
+        setCustomPlayerName('');
+      }
+      setSelectedPlayerForPhoto('');
+      setCustomPlayerPhotoURL('');
+      alert(`Success! Set profile photo for ${targetName}`);
+    } catch (err) {
+      console.error("Error saving player photo:", err);
+      alert("Failed to save player photo. Please try again.");
+    } finally {
+      setIsSavingPhoto(false);
+    }
+  };
+
+  const handleStartEditPhoto = (name: string) => {
+    setSelectedPlayerForPhoto(name);
+    setCustomPlayerPhotoURL(playerProfiles[name.toLowerCase()] || '');
+    const adminEl = document.getElementById('admin-photos-panel');
+    if (adminEl) {
+      adminEl.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
   useEffect(() => {
     if (userProfile) {
@@ -187,9 +288,25 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
             {orangeCapWinner ? (
               <div className="space-y-1">
                 <p className="text-xs uppercase font-mono tracking-wider text-slate-400">Leading Run Scorer</p>
-                <h3 className="font-display font-black text-3xl text-white tracking-tight">
-                  {orangeCapWinner.name}
-                </h3>
+                <div className="flex items-center gap-3 py-1">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-600 bg-slate-800 flex items-center justify-center flex-shrink-0">
+                    {playerProfiles[orangeCapWinner.name.toLowerCase()] ? (
+                      <img 
+                        src={playerProfiles[orangeCapWinner.name.toLowerCase()]} 
+                        alt={orangeCapWinner.name} 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className={`w-full h-full bg-gradient-to-br ${getGradientByName(orangeCapWinner.name)} flex items-center justify-center text-white text-sm font-bold font-display uppercase`}>
+                        {orangeCapWinner.name.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  <h3 className="font-display font-black text-3xl text-white tracking-tight">
+                    {orangeCapWinner.name}
+                  </h3>
+                </div>
                 <div className="flex items-baseline gap-1">
                   <span className="font-display font-black text-5xl text-orange-400">{orangeCapWinner.runsScored}</span>
                   <span className="text-sm font-semibold text-slate-400">Runs</span>
@@ -221,9 +338,25 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
             {purpleCapWinner ? (
               <div className="space-y-1">
                 <p className="text-xs uppercase font-mono tracking-wider text-slate-400">Most Restrictive Bowler</p>
-                <h3 className="font-display font-black text-3xl text-white tracking-tight">
-                  {purpleCapWinner.name}
-                </h3>
+                <div className="flex items-center gap-3 py-1">
+                  <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-600 bg-slate-800 flex items-center justify-center flex-shrink-0">
+                    {playerProfiles[purpleCapWinner.name.toLowerCase()] ? (
+                      <img 
+                        src={playerProfiles[purpleCapWinner.name.toLowerCase()]} 
+                        alt={purpleCapWinner.name} 
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className={`w-full h-full bg-gradient-to-br ${getGradientByName(purpleCapWinner.name)} flex items-center justify-center text-white text-sm font-bold font-display uppercase`}>
+                        {purpleCapWinner.name.charAt(0)}
+                      </div>
+                    )}
+                  </div>
+                  <h3 className="font-display font-black text-3xl text-white tracking-tight">
+                    {purpleCapWinner.name}
+                  </h3>
+                </div>
                 <div className="flex items-baseline gap-1">
                   <span className="font-display font-black text-5xl text-purple-400">
                     {purpleCapWinner.runsConceded}
@@ -278,7 +411,35 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                       {index + 1}
                     </td>
                     <td className="py-3 px-3 font-semibold text-slate-200">
-                      {standing.name}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center flex-shrink-0">
+                            {playerProfiles[standing.name.toLowerCase()] ? (
+                              <img 
+                                src={playerProfiles[standing.name.toLowerCase()]} 
+                                alt={standing.name} 
+                                className="w-full h-full object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            ) : (
+                              <div className={`w-full h-full bg-gradient-to-br ${getGradientByName(standing.name)} flex items-center justify-center text-white text-xs font-bold font-display uppercase`}>
+                                {standing.name.charAt(0)}
+                              </div>
+                            )}
+                          </div>
+                          <span>{standing.name}</span>
+                        </div>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditPhoto(standing.name)}
+                            className="p-1 hover:bg-slate-700/50 rounded-md text-slate-400 hover:text-orange-400 transition-colors cursor-pointer"
+                            title="Set Profile Photo"
+                          >
+                            <Edit3 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 px-2 text-center text-slate-400 font-mono">
                       {standing.matchesPlayed}
@@ -321,136 +482,234 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
           </div>
         </div>
 
-        {/* Profile Card / Customize Arena Preferences - 4 cols */}
-        <div className="lg:col-span-4 bg-[#161D2F] border border-slate-700 rounded-2xl p-6 shadow-xl space-y-6">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <User className="w-5 h-5 text-orange-400" />
-              <h3 className="font-display font-bold text-lg text-slate-100 uppercase tracking-tight">My HCL Profile</h3>
+        {/* Sidebar Container - 4 cols */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Profile Card / Customize Arena Preferences */}
+          <div className="bg-[#161D2F] border border-slate-700 rounded-2xl p-6 shadow-xl space-y-6">
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-orange-400" />
+                <h3 className="font-display font-bold text-lg text-slate-100 uppercase tracking-tight">My HCL Profile</h3>
+              </div>
+              {!isEditing && userProfile && (
+                <button
+                  onClick={() => setIsEditing(true)}
+                  className="p-1.5 hover:bg-slate-800 rounded-lg text-orange-400 hover:text-orange-300 transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
+                >
+                  <Edit3 className="w-3.5 h-3.5" /> Edit
+                </button>
+              )}
             </div>
-            {!isEditing && userProfile && (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="p-1.5 hover:bg-slate-800 rounded-lg text-orange-400 hover:text-orange-300 transition-colors flex items-center gap-1 text-xs font-semibold cursor-pointer"
-              >
-                <Edit3 className="w-3.5 h-3.5" /> Edit
-              </button>
-            )}
-          </div>
 
-          <div className="space-y-4">
-            {isEditing ? (
-              <div className="space-y-4 text-xs">
-                {/* Display Name */}
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 block">Player Name</label>
-                  <input
-                    type="text"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500"
-                    placeholder="E.g. Pranshul"
-                  />
-                </div>
-
-                {/* Batting Stance */}
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 block">Batting Stance</label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setBattingStyle('Right-handed')}
-                      className={`px-3 py-2 rounded-lg text-center font-medium border transition-colors cursor-pointer ${
-                        battingStyle === 'Right-handed'
-                          ? 'bg-orange-500/15 border-orange-500 text-orange-400 font-bold'
-                          : 'bg-[#1A2238] border-slate-700 text-slate-400'
-                      }`}
-                    >
-                      Right-handed
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setBattingStyle('Left-handed')}
-                      className={`px-3 py-2 rounded-lg text-center font-medium border transition-colors cursor-pointer ${
-                        battingStyle === 'Left-handed'
-                          ? 'bg-orange-500/15 border-orange-500 text-orange-400 font-bold'
-                          : 'bg-[#1A2238] border-slate-700 text-slate-400'
-                      }`}
-                    >
-                      Left-handed
-                    </button>
+            <div className="space-y-4">
+              {isEditing ? (
+                <div className="space-y-4 text-xs">
+                  {/* Display Name */}
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-400 block">Player Name</label>
+                    <input
+                      type="text"
+                      value={displayName}
+                      onChange={(e) => setDisplayName(e.target.value)}
+                      className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500"
+                      placeholder="E.g. Pranshul"
+                    />
                   </div>
-                </div>
 
-                {/* Favorite Number */}
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 block">Favorite Number (1-6)</label>
-                  <div className="grid grid-cols-6 gap-1 font-mono">
-                    {[1, 2, 3, 4, 5, 6].map((num) => (
+                  {/* Batting Stance */}
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-400 block">Batting Stance</label>
+                    <div className="grid grid-cols-2 gap-2">
                       <button
-                        key={num}
                         type="button"
-                        onClick={() => setFavoriteNumber(num)}
-                        className={`py-2 rounded-lg text-center font-bold border transition-colors cursor-pointer ${
-                          favoriteNumber === num
-                            ? 'bg-orange-500/15 border-orange-500 text-orange-400 text-sm'
+                        onClick={() => setBattingStyle('Right-handed')}
+                        className={`px-3 py-2 rounded-lg text-center font-medium border transition-colors cursor-pointer ${
+                          battingStyle === 'Right-handed'
+                            ? 'bg-orange-500/15 border-orange-500 text-orange-400 font-bold'
                             : 'bg-[#1A2238] border-slate-700 text-slate-400'
                         }`}
                       >
-                        {num}
+                        Right-handed
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBattingStyle('Left-handed')}
+                        className={`px-3 py-2 rounded-lg text-center font-medium border transition-colors cursor-pointer ${
+                          battingStyle === 'Left-handed'
+                            ? 'bg-orange-500/15 border-orange-500 text-orange-400 font-bold'
+                            : 'bg-[#1A2238] border-slate-700 text-slate-400'
+                        }`}
+                      >
+                        Left-handed
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Favorite Number */}
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-400 block">Favorite Number (1-6)</label>
+                    <div className="grid grid-cols-6 gap-1 font-mono">
+                      {[1, 2, 3, 4, 5, 6].map((num) => (
+                        <button
+                          key={num}
+                          type="button"
+                          onClick={() => setFavoriteNumber(num)}
+                          className={`py-2 rounded-lg text-center font-bold border transition-colors cursor-pointer ${
+                            favoriteNumber === num
+                              ? 'bg-orange-500/15 border-orange-500 text-orange-400 text-sm'
+                              : 'bg-[#1A2238] border-slate-700 text-slate-400'
+                          }`}
+                        >
+                          {num}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Save controls */}
+                  <button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    disabled={isSaving || !displayName.trim()}
+                    className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-1.5 shadow-[0_3px_0_0_#9a3412] active:translate-y-0.5 active:shadow-none transition-all duration-100 disabled:opacity-50 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    {isSaving ? 'Saving...' : 'Save Preferences'}
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-full flex items-center justify-center font-display font-black text-2xl uppercase tracking-tighter shadow-md">
+                      {userProfile?.displayName ? userProfile.displayName.charAt(0) : 'P'}
+                    </div>
+                    <div>
+                      <h4 className="font-display font-black text-lg text-slate-200 leading-tight">
+                        {userProfile?.displayName || 'Guest Player'}
+                      </h4>
+                      <span className="inline-block bg-orange-500/15 text-orange-400 border border-orange-500/20 font-mono font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded mt-1">
+                        {userProfile?.role || 'Guest'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-slate-800 text-xs pt-2">
+                    <div className="py-2.5 flex justify-between items-center">
+                      <span className="text-slate-400 font-medium">Batting Stance</span>
+                      <span className="font-bold text-slate-200">{userProfile?.battingStyle || 'Right-handed'}</span>
+                    </div>
+                    <div className="py-2.5 flex justify-between items-center">
+                      <span className="text-slate-400 font-medium">Favorite Hand Gesture</span>
+                      <span className="font-mono font-bold text-orange-400 text-xs bg-[#1A2238] border border-slate-700 px-2 py-0.5 rounded">
+                        {userProfile?.favoriteNumber || 6} (Thumb)
+                      </span>
+                    </div>
+                    <div className="py-2.5 flex justify-between items-center">
+                      <span className="text-slate-400 font-medium">Join Date</span>
+                      <span className="text-slate-400 font-mono">
+                        {userProfile?.createdAt ? new Date(userProfile.createdAt).toLocaleDateString() : 'Today'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Admin: Manage Player Photos */}
+          {isAdmin && (
+            <div id="admin-photos-panel" className="bg-[#161D2F] border border-slate-700 rounded-2xl p-6 shadow-xl space-y-4">
+              <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                <Shield className="w-5 h-5 text-red-400" />
+                <h3 className="font-display font-bold text-base text-slate-100 uppercase tracking-tight">Admin: Player Photos</h3>
+              </div>
+              
+              <form onSubmit={handleSavePlayerPhoto} className="space-y-4 text-xs">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 block">Select Player</label>
+                  <select
+                    value={selectedPlayerForPhoto}
+                    onChange={(e) => {
+                      setSelectedPlayerForPhoto(e.target.value);
+                      if (e.target.value && e.target.value !== 'new_custom') {
+                        setCustomPlayerPhotoURL(playerProfiles[e.target.value.toLowerCase()] || '');
+                      } else {
+                        setCustomPlayerPhotoURL('');
+                      }
+                    }}
+                    className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500"
+                  >
+                    <option value="">-- Choose existing player --</option>
+                    {playersArray.map(p => (
+                      <option key={p.name} value={p.name}>{p.name}</option>
+                    ))}
+                    <option value="new_custom">-- Add a new player name --</option>
+                  </select>
+                </div>
+
+                {selectedPlayerForPhoto === 'new_custom' && (
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-400 block">New Player Name</label>
+                    <input
+                      type="text"
+                      value={customPlayerName}
+                      onChange={(e) => setCustomPlayerName(e.target.value)}
+                      placeholder="E.g. Sachin"
+                      className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500"
+                    />
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="font-bold text-slate-400 block">Choose Avatar Preset</label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {AVATAR_PRESETS.map((avatar) => (
+                      <button
+                        key={avatar.name}
+                        type="button"
+                        onClick={() => setCustomPlayerPhotoURL(avatar.url)}
+                        className={`relative w-10 h-10 rounded-full overflow-hidden border-2 transition-all hover:scale-105 cursor-pointer ${
+                          customPlayerPhotoURL === avatar.url ? 'border-orange-500 ring-2 ring-orange-500/30' : 'border-slate-700'
+                        }`}
+                        title={avatar.name}
+                      >
+                        <img src={avatar.url} alt={avatar.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Save controls */}
-                <button
-                  type="button"
-                  onClick={handleSaveProfile}
-                  disabled={isSaving || !displayName.trim()}
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-1.5 shadow-[0_3px_0_0_#9a3412] active:translate-y-0.5 active:shadow-none transition-all duration-100 disabled:opacity-50 cursor-pointer"
-                >
-                  <Save className="w-4 h-4" />
-                  {isSaving ? 'Saving...' : 'Save Preferences'}
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-full flex items-center justify-center font-display font-black text-2xl uppercase tracking-tighter shadow-md">
-                    {userProfile?.displayName ? userProfile.displayName.charAt(0) : 'P'}
-                  </div>
-                  <div>
-                    <h4 className="font-display font-black text-lg text-slate-200 leading-tight">
-                      {userProfile?.displayName || 'Guest Player'}
-                    </h4>
-                    <span className="inline-block bg-orange-500/15 text-orange-400 border border-orange-500/20 font-mono font-bold text-[10px] uppercase tracking-wider px-2 py-0.5 rounded mt-1">
-                      {userProfile?.role || 'Guest'}
-                    </span>
-                  </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 block">Or Custom Image URL</label>
+                  <input
+                    type="url"
+                    value={customPlayerPhotoURL}
+                    onChange={(e) => setCustomPlayerPhotoURL(e.target.value)}
+                    placeholder="https://images.unsplash.com/..."
+                    className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-orange-500 font-mono"
+                  />
                 </div>
 
-                <div className="divide-y divide-slate-800 text-xs pt-2">
-                  <div className="py-2.5 flex justify-between items-center">
-                    <span className="text-slate-400 font-medium">Batting Stance</span>
-                    <span className="font-bold text-slate-200">{userProfile?.battingStyle || 'Right-handed'}</span>
+                {customPlayerPhotoURL && (
+                  <div className="flex items-center gap-3 bg-[#1A2238] p-2 rounded-xl border border-slate-700">
+                    <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-600 flex-shrink-0">
+                      <img src={customPlayerPhotoURL} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-mono truncate">Avatar Preview</span>
                   </div>
-                  <div className="py-2.5 flex justify-between items-center">
-                    <span className="text-slate-400 font-medium">Favorite Hand Gesture</span>
-                    <span className="font-mono font-bold text-orange-400 text-xs bg-[#1A2238] border border-slate-700 px-2 py-0.5 rounded">
-                      {userProfile?.favoriteNumber || 6} (Thumb)
-                    </span>
-                  </div>
-                  <div className="py-2.5 flex justify-between items-center">
-                    <span className="text-slate-400 font-medium">Join Date</span>
-                    <span className="text-slate-400 font-mono">
-                      {userProfile?.createdAt ? new Date(userProfile.createdAt).toLocaleDateString() : 'Today'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={isSavingPhoto || (!selectedPlayerForPhoto) || (selectedPlayerForPhoto === 'new_custom' && !customPlayerName.trim())}
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-1.5 shadow-[0_3px_0_0_#9a3412] active:translate-y-0.5 active:shadow-none transition-all duration-100 disabled:opacity-50 cursor-pointer text-xs uppercase"
+                >
+                  <Save className="w-4 h-4" />
+                  {isSavingPhoto ? 'Saving Photo...' : 'Apply Photo'}
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </div>
     </div>

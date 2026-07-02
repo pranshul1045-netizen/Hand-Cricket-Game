@@ -1,8 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, Plus, Trophy, Shield, Search, ArrowRight, User, Trash2 } from 'lucide-react';
 import { db, auth } from '../firebase';
-import { doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, collection, onSnapshot } from 'firebase/firestore';
 import { SchoolMatch, UserProfile } from '../types';
+
+const getGradientByName = (name: string) => {
+  const gradients = [
+    'from-pink-500 to-rose-500',
+    'from-amber-500 to-orange-600',
+    'from-emerald-400 to-teal-600',
+    'from-blue-500 to-indigo-600',
+    'from-violet-500 to-purple-600',
+    'from-fuchsia-500 to-pink-600',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % gradients.length;
+  return gradients[index];
+};
 
 interface LeagueMatchesSectionProps {
   userProfile: UserProfile | null;
@@ -15,6 +32,25 @@ interface LeagueMatchesSectionProps {
 export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdmin, onAddMatch, onDeleteMatch }: LeagueMatchesSectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+
+  // Player Profile Photos
+  const [playerProfiles, setPlayerProfiles] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'playerProfiles'), (snapshot) => {
+      const profiles: Record<string, string> = {};
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.photoURL) {
+          profiles[docSnap.id] = data.photoURL; // doc.id is lowercased name
+        }
+      });
+      setPlayerProfiles(profiles);
+    }, (err) => {
+      console.error("Error loading profiles in LeagueMatchesSection:", err);
+    });
+    return () => unsub();
+  }, []);
 
   // Form State
   const [player1, setPlayer1] = useState('');
@@ -297,8 +333,22 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
             {/* Match Grid representation */}
             <div className="grid grid-cols-3 items-center gap-2">
               {/* Player 1 Runs */}
-              <div className="text-center space-y-1">
-                <span className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wider truncate">
+              <div className="text-center space-y-1 flex flex-col items-center">
+                <div className="w-8 h-8 rounded-full overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center mb-1">
+                  {playerProfiles[match.player1.toLowerCase()] ? (
+                    <img 
+                      src={playerProfiles[match.player1.toLowerCase()]} 
+                      alt={match.player1} 
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className={`w-full h-full bg-gradient-to-br ${getGradientByName(match.player1)} flex items-center justify-center text-white text-xs font-bold font-display uppercase`}>
+                      {match.player1.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <span className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wider truncate max-w-[85px]" title={match.player1}>
                   {match.player1}
                 </span>
                 <span className="font-display font-black text-3xl text-slate-100 block leading-none pt-1">
@@ -323,8 +373,22 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
               </div>
 
               {/* Player 2 Runs */}
-              <div className="text-center space-y-1">
-                <span className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wider truncate">
+              <div className="text-center space-y-1 flex flex-col items-center">
+                <div className="w-8 h-8 rounded-full overflow-hidden border border-slate-700 bg-slate-800 flex items-center justify-center mb-1">
+                  {playerProfiles[match.player2.toLowerCase()] ? (
+                    <img 
+                      src={playerProfiles[match.player2.toLowerCase()]} 
+                      alt={match.player2} 
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className={`w-full h-full bg-gradient-to-br ${getGradientByName(match.player2)} flex items-center justify-center text-white text-xs font-bold font-display uppercase`}>
+                      {match.player2.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <span className="block text-xs font-mono font-bold text-slate-400 uppercase tracking-wider truncate max-w-[85px]" title={match.player2}>
                   {match.player2}
                 </span>
                 <span className="font-display font-black text-3xl text-slate-100 block leading-none pt-1">
