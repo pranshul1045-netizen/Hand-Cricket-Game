@@ -34,18 +34,18 @@ service cloud.firestore {
         && (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 2000))
         && data.role in ['user', 'admin']
         && (!('battingStyle' in data) || data.battingStyle == null || data.battingStyle in ['Right-handed', 'Left-handed'])
-        && (!('favoriteNumber' in data) || data.favoriteNumber == null || (data.favoriteNumber is int && data.favoriteNumber >= 1 && data.favoriteNumber <= 6));
+        && (!('favoriteNumber' in data) || data.favoriteNumber == null || ((data.favoriteNumber is int || data.favoriteNumber is float) && data.favoriteNumber >= 1 && data.favoriteNumber <= 6));
     }
 
     function isValidSchoolMatch(data) {
       return data.player1 is string && data.player1.size() > 0 && data.player1.size() <= 100
         && data.player2 is string && data.player2.size() > 0 && data.player2.size() <= 100
-        && data.player1Runs is int && data.player1Runs >= 0 && data.player1Runs <= 1000
-        && data.player2Runs is int && data.player2Runs >= 0 && data.player2Runs <= 1000
-        && (!('player1Balls' in data) || (data.player1Balls is int && data.player1Balls >= 0))
-        && (!('player2Balls' in data) || (data.player2Balls is int && data.player2Balls >= 0))
-        && (!('player1Conceded' in data) || (data.player1Conceded is int && data.player1Conceded >= 0))
-        && (!('player2Conceded' in data) || (data.player2Conceded is int && data.player2Conceded >= 0))
+        && (data.player1Runs is int || data.player1Runs is float) && data.player1Runs >= 0 && data.player1Runs <= 1000
+        && (data.player2Runs is int || data.player2Runs is float) && data.player2Runs >= 0 && data.player2Runs <= 1000
+        && (!('player1Balls' in data) || ((data.player1Balls is int || data.player1Balls is float) && data.player1Balls >= 0))
+        && (!('player2Balls' in data) || ((data.player2Balls is int || data.player2Balls is float) && data.player2Balls >= 0))
+        && (!('player1Conceded' in data) || ((data.player1Conceded is int || data.player1Conceded is float) && data.player1Conceded >= 0))
+        && (!('player2Conceded' in data) || ((data.player2Conceded is int || data.player2Conceded is float) && data.player2Conceded >= 0))
         && (!('winner' in data) || (data.winner is string && data.winner.size() <= 100))
         && data.status in ['completed', 'scheduled']
         && (!('date' in data) || (data.date is string && data.date.size() <= 100))
@@ -56,20 +56,20 @@ service cloud.firestore {
       return data.playerUid is string && data.playerUid == request.auth.uid
         && data.playerName is string && data.playerName.size() > 0 && data.playerName.size() <= 100
         && data.opponentName is string && data.opponentName.size() > 0 && data.opponentName.size() <= 100
-        && data.playerRuns is int && data.playerRuns >= 0 && data.playerRuns <= 1000
-        && data.opponentRuns is int && data.opponentRuns >= 0 && data.opponentRuns <= 1000
+        && (data.playerRuns is int || data.playerRuns is float) && data.playerRuns >= 0 && data.playerRuns <= 1000
+        && (data.opponentRuns is int || data.opponentRuns is float) && data.opponentRuns >= 0 && data.opponentRuns <= 1000
         && data.winner in ['player', 'opponent']
         && data.createdAt is string && data.createdAt.size() <= 50;
     }
 
     function isValidPlayerStanding(data) {
       return data.playerName is string && data.playerName.size() > 0 && data.playerName.size() <= 100
-        && data.matchesPlayed is int && data.matchesPlayed >= 0
-        && data.matchesWon is int && data.matchesWon >= 0
-        && data.matchesLost is int && data.matchesLost >= 0
-        && data.totalRunsScored is int && data.totalRunsScored >= 0
-        && data.totalRunsConceded is int && data.totalRunsConceded >= 0
-        && data.points is int && data.points >= 0
+        && (data.matchesPlayed is int || data.matchesPlayed is float) && data.matchesPlayed >= 0
+        && (data.matchesWon is int || data.matchesWon is float) && data.matchesWon >= 0
+        && (data.matchesLost is int || data.matchesLost is float) && data.matchesLost >= 0
+        && (data.totalRunsScored is int || data.totalRunsScored is float) && data.totalRunsScored >= 0
+        && (data.totalRunsConceded is int || data.totalRunsConceded is float) && data.totalRunsConceded >= 0
+        && (data.points is int || data.points is float) && data.points >= 0
         && data.updatedAt is string && data.updatedAt.size() <= 50;
     }
 
