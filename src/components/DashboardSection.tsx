@@ -35,6 +35,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
     won: number;
     lost: number;
     points: number;
+    runRate: number;
   }> = {};
 
   // Process official school yard matches
@@ -45,10 +46,10 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
     const p2 = match.player2;
 
     if (!playerStatsMap[p1]) {
-      playerStatsMap[p1] = { name: p1, runsScored: 0, runsConceded: 0, matchesPlayed: 0, won: 0, lost: 0, points: 0 };
+      playerStatsMap[p1] = { name: p1, runsScored: 0, runsConceded: 0, matchesPlayed: 0, won: 0, lost: 0, points: 0, runRate: 0 };
     }
     if (!playerStatsMap[p2]) {
-      playerStatsMap[p2] = { name: p2, runsScored: 0, runsConceded: 0, matchesPlayed: 0, won: 0, lost: 0, points: 0 };
+      playerStatsMap[p2] = { name: p2, runsScored: 0, runsConceded: 0, matchesPlayed: 0, won: 0, lost: 0, points: 0, runRate: 0 };
     }
 
     // Accumulate runs
@@ -80,6 +81,12 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
     }
   });
 
+  // Calculate runRate for each player
+  Object.keys(playerStatsMap).forEach(key => {
+    const player = playerStatsMap[key];
+    player.runRate = player.runsScored - player.runsConceded;
+  });
+
   const playersArray = Object.values(playerStatsMap);
 
   // Orange Cap (Most Runs Scored)
@@ -97,9 +104,10 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
       return avgA - avgB; // Tiebreaker: Lowest average runs conceded wins
     })[0] || null;
 
-  // Standings Sorted by Points, then Runs Scored
+  // Standings Sorted by Points, then Run Rate
   const sortedStandings = [...playersArray].sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
+    if (b.runRate !== a.runRate) return b.runRate - a.runRate;
     return b.runsScored - a.runsScored;
   });
 
@@ -259,6 +267,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                   <th className="py-3 px-2 text-center w-12">L</th>
                   <th className="py-3 px-2 text-center w-20">Runs Scored</th>
                   <th className="py-3 px-2 text-center w-20">Runs Conc.</th>
+                  <th className="py-3 px-2 text-center w-20">Run Rate</th>
                   <th className="py-3 px-3 text-center w-16 bg-orange-500/10 text-orange-400 border-l border-slate-700">Points</th>
                 </tr>
               </thead>
@@ -286,6 +295,15 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                     <td className="py-3 px-2 text-center font-mono text-slate-400">
                       {standing.runsConceded}
                     </td>
+                    <td className={`py-3 px-2 text-center font-mono font-bold ${
+                      standing.runRate > 0 
+                        ? 'text-green-400' 
+                        : standing.runRate < 0 
+                          ? 'text-red-400' 
+                          : 'text-slate-400'
+                    }`}>
+                      {standing.runRate > 0 ? `+${standing.runRate}` : standing.runRate}
+                    </td>
                     <td className="py-3 px-3 text-center font-display font-black bg-orange-500/5 text-orange-400 text-sm font-mono border-l border-slate-700">
                       {standing.points}
                     </td>
@@ -293,7 +311,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                 ))}
                 {sortedStandings.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="py-8 text-center text-slate-400 text-sm">
+                    <td colSpan={9} className="py-8 text-center text-slate-400 text-sm">
                       No matching records found. Create an Admin profile or log in to register official matches!
                     </td>
                   </tr>
