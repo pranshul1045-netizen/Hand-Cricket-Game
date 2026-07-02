@@ -52,12 +52,13 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
     };
 
     try {
-      if (!auth.currentUser || auth.currentUser.uid === 'guest_local' || userProfile?.uid === 'guest_local') {
+      const isUserAdmin = isAdmin || userProfile?.role === 'admin' || userProfile?.uid === 'admin_local';
+      if (isUserAdmin) {
+        await setDoc(doc(db, 'schoolMatches', matchId), newMatchPayload);
+      } else {
         if (onAddMatch) {
           onAddMatch(newMatchPayload);
         }
-      } else {
-        await setDoc(doc(db, 'schoolMatches', matchId), newMatchPayload);
       }
       // Reset form
       setPlayer1('');
@@ -77,12 +78,13 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
   const handleDeleteMatch = async (matchId: string) => {
     if (!window.confirm("Are you sure you want to remove this match scorecard?")) return;
     try {
-      if (!auth.currentUser || auth.currentUser.uid === 'guest_local' || userProfile?.uid === 'guest_local') {
+      const isUserAdmin = isAdmin || userProfile?.role === 'admin' || userProfile?.uid === 'admin_local';
+      if (isUserAdmin) {
+        await deleteDoc(doc(db, 'schoolMatches', matchId));
+      } else {
         if (onDeleteMatch) {
           onDeleteMatch(matchId);
         }
-      } else {
-        await deleteDoc(doc(db, 'schoolMatches', matchId));
       }
     } catch (err) {
       console.error("Error deleting schoolyard match scorecard: ", err);

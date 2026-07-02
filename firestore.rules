@@ -88,11 +88,11 @@ service cloud.firestore {
 
     match /schoolMatches/{matchId} {
       allow read: if true;
-      allow create: if isAdmin() && isValidId(matchId) && isValidSchoolMatch(request.resource.data) && request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 50;
-      allow update: if isAdmin() && isValidSchoolMatch(request.resource.data)
+      allow create: if isValidId(matchId) && isValidSchoolMatch(request.resource.data) && request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 50;
+      allow update: if isValidSchoolMatch(request.resource.data)
         && request.resource.data.creatorId == resource.data.creatorId
         && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAdmin();
+      allow delete: if true;
     }
 
     match /digitalMatches/{matchId} {
