@@ -32,6 +32,7 @@ interface LeagueMatchesSectionProps {
 export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdmin, onAddMatch, onDeleteMatch }: LeagueMatchesSectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Player Profile Photos
   const [playerProfiles, setPlayerProfiles] = useState<Record<string, string>>({});
@@ -113,7 +114,6 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
   };
 
   const handleDeleteMatch = async (matchId: string) => {
-    if (!window.confirm("Are you sure you want to remove this match scorecard?")) return;
     try {
       const isUserAdmin = isAdmin || userProfile?.role === 'admin' || userProfile?.uid === 'admin_local';
       if (isUserAdmin) {
@@ -123,6 +123,7 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
           onDeleteMatch(matchId);
         }
       }
+      setConfirmDeleteId(null);
     } catch (err) {
       console.error("Error deleting schoolyard match scorecard: ", err);
     }
@@ -322,13 +323,46 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
                 <Calendar className="w-3.5 h-3.5" />
                 <span className="font-mono">{match.date || 'School Yard Match'}</span>
               </div>
-              <span className={`px-2.5 py-0.5 font-mono font-bold text-[9px] uppercase tracking-wider rounded border ${
-                match.status === 'completed'
-                  ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                  : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-              }`}>
-                {match.status}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`px-2.5 py-0.5 font-mono font-bold text-[9px] uppercase tracking-wider rounded border ${
+                  match.status === 'completed'
+                    ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                    : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                }`}>
+                  {match.status}
+                </span>
+                {isAdmin && (
+                  <div className="flex items-center gap-1.5">
+                    {confirmDeleteId === match.id ? (
+                      <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-150">
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMatch(match.id)}
+                          className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white font-mono font-bold text-[9px] uppercase rounded transition-all duration-150 cursor-pointer"
+                        >
+                          Sure?
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-slate-200 font-mono font-bold text-[9px] uppercase rounded transition-all duration-150 cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteId(match.id)}
+                        className="p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg border border-red-500/20 hover:border-red-500/40 transition-all duration-200 cursor-pointer"
+                        title="Remove match scorecard"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Match Grid representation */}
@@ -409,17 +443,7 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
               </div>
             )}
 
-            {/* Delete control for Admin */}
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => handleDeleteMatch(match.id)}
-                className="absolute top-2 right-2 p-1.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-                title="Remove match scorecard"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+
           </div>
         ))}
 
