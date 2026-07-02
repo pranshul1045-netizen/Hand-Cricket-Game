@@ -106,12 +106,20 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'league' | 'rules'>('dashboard');
 
-  // Guest registration state
+  // Login states
+  const [loginMode, setLoginMode] = useState<'guest' | 'admin'>('guest');
   const [guestName, setGuestName] = useState('');
+  const [adminUsername, setAdminUsername] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminError, setAdminError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
 
   // Is super admin check
-  const isAdmin = user?.email === 'pranshul1045@gmail.com' || user?.email === 'pranshul1045@gamil.com';
+  const isAdmin = 
+    user?.email === 'pranshul1045@gmail.com' || 
+    user?.email === 'pranshul1045@gamil.com' || 
+    user?.uid === 'admin_local' || 
+    userProfile?.role === 'admin';
 
   // Handle Auth state transitions
   useEffect(() => {
@@ -248,6 +256,30 @@ export default function App() {
     }
   };
 
+  const handleAdminLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminError('');
+    if (adminUsername.trim().toLowerCase() === 'pranshul' && adminPassword === 'pranshul1045') {
+      const initialProfile: UserProfile = {
+        uid: 'admin_local',
+        displayName: 'Pranshul (Admin)',
+        role: 'admin',
+        battingStyle: 'Right-handed',
+        favoriteNumber: 10,
+        createdAt: new Date().toISOString()
+      };
+      localStorage.setItem('hcl_local_guest_active', 'true');
+      localStorage.setItem('hcl_local_guest_profile', JSON.stringify(initialProfile));
+      
+      setUser({ uid: 'admin_local', isAnonymous: true, displayName: 'Pranshul (Admin)' });
+      setUserProfile(initialProfile);
+      setAdminUsername('');
+      setAdminPassword('');
+    } else {
+      setAdminError('Invalid username or password!');
+    }
+  };
+
   const handleLogout = async () => {
     try {
       localStorage.removeItem('hcl_local_guest_active');
@@ -309,47 +341,99 @@ export default function App() {
             </p>
           </div>
 
+          {/* Tab Selector */}
+          <div className="flex border border-slate-700 p-1 bg-[#1A2238]/60 rounded-xl">
+            <button
+              onClick={() => { setLoginMode('guest'); setAdminError(''); }}
+              className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
+                loginMode === 'guest'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Guest Play
+            </button>
+            <button
+              onClick={() => { setLoginMode('admin'); setAdminError(''); }}
+              className={`flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all ${
+                loginMode === 'admin'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Admin Login
+            </button>
+          </div>
+
           {/* Login Options Container */}
           <div className="space-y-6 relative z-10">
-            {/* Quick Guest Join */}
-            <form onSubmit={handleAnonymousLogin} className="space-y-3 text-left">
-              <div className="space-y-1">
-                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
-                  Quick Start (Enter Player Name)
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
-                  placeholder="E.g. Pranshul"
-                  maxLength={15}
-                  className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-semibold"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={signingIn || !guestName.trim()}
-                className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-black text-xs uppercase tracking-wide py-3.5 rounded-xl shadow-[0_3.5px_0_0_#9a3412] hover:brightness-105 active:translate-y-0.5 active:shadow-none transition-all duration-100 flex items-center justify-center gap-1.5"
-              >
-                <Sparkles className="w-4 h-4 fill-current" /> Quick Guest Play
-              </button>
-            </form>
-
-            <div className="relative flex py-2 items-center">
-              <div className="flex-grow border-t border-slate-700"></div>
-              <span className="flex-shrink mx-3 text-[10px] font-mono text-slate-500 uppercase font-bold">Or Connect Account</span>
-              <div className="flex-grow border-t border-slate-700"></div>
-            </div>
-
-            {/* Google Authentication (For verified Profiles) */}
-            <button
-              onClick={handleGoogleLogin}
-              disabled={signingIn}
-              className="w-full bg-[#1A2238] hover:bg-[#202b46] text-slate-200 font-display font-black text-xs uppercase tracking-wide py-3.5 rounded-xl border border-slate-700 shadow-sm active:translate-y-0.5 transition-all flex items-center justify-center gap-2"
-            >
-              <LogIn className="w-4 h-4 text-orange-400" /> Login with Google Account
-            </button>
+            {loginMode === 'guest' ? (
+              /* Quick Guest Join */
+              <form onSubmit={handleAnonymousLogin} className="space-y-3 text-left">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                    Quick Start (Enter Player Name)
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={guestName}
+                    onChange={(e) => setGuestName(e.target.value)}
+                    placeholder="E.g. Pranshul"
+                    maxLength={15}
+                    className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-semibold"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={signingIn || !guestName.trim()}
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-black text-xs uppercase tracking-wide py-3.5 rounded-xl shadow-[0_3.5px_0_0_#9a3412] hover:brightness-105 active:translate-y-0.5 active:shadow-none transition-all duration-100 flex items-center justify-center gap-1.5"
+                >
+                  <Sparkles className="w-4 h-4 fill-current" /> Quick Guest Play
+                </button>
+              </form>
+            ) : (
+              /* Admin Credentials Form */
+              <form onSubmit={handleAdminLogin} className="space-y-4 text-left">
+                {adminError && (
+                  <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs px-3 py-2 rounded-xl text-center font-bold">
+                    {adminError}
+                  </div>
+                )}
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                    Admin Username
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={adminUsername}
+                    onChange={(e) => setAdminUsername(e.target.value)}
+                    placeholder="Enter admin username"
+                    className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-semibold"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                    Admin Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-semibold"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-black text-xs uppercase tracking-wide py-3.5 rounded-xl shadow-[0_3.5px_0_0_#9a3412] hover:brightness-105 active:translate-y-0.5 active:shadow-none transition-all duration-100 flex items-center justify-center gap-1.5"
+                >
+                  <LogIn className="w-4 h-4" /> Sign In as Admin
+                </button>
+              </form>
+            )}
           </div>
         </div>
       </div>
