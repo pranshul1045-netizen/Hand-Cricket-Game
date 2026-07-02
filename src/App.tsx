@@ -200,10 +200,19 @@ export default function App() {
       await signInWithPopup(auth, provider);
       localStorage.removeItem('hcl_local_guest_active');
       localStorage.removeItem('hcl_local_guest_profile');
-    } catch (err) {
-      console.error("Google authentication failed. Attempting Anonymous session fallback...", err);
-      // Fall back to showing manual/anonymous sign in if popup blocked
-      alert("Google popup blocked/failed. Please use 'Quick Start (Guest)' to access instantly!");
+    } catch (err: any) {
+      console.error("Google authentication failed:", err);
+      
+      let message = "Google login failed. Please use 'Quick Start (Guest)' to access instantly!";
+      if (err.code === 'auth/unauthorized-domain') {
+        message = "This domain (hand-cricket-game-pe56.onrender.com) is not authorized in your Firebase Console. Please add it to your Firebase Auth -> Settings -> Authorized Domains.";
+      } else if (err.code === 'auth/popup-blocked') {
+        message = "The sign-in popup was blocked by your browser. Please allow popups for this site or try again.";
+      } else if (err.message) {
+        message = `Google login failed: ${err.message}. You can still play using 'Quick Start (Guest)'.`;
+      }
+      
+      alert(message);
     } finally {
       setSigningIn(false);
     }
