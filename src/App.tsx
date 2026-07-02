@@ -3,7 +3,7 @@ import {
   Trophy, Gamepad2, BookOpen, Sparkles, LogIn, LogOut, 
   User, Loader2, Calendar, ShieldAlert, CheckCircle2 
 } from 'lucide-react';
-import { auth, db } from './firebase';
+import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { 
   onAuthStateChanged, signInAnonymously, signInWithPopup, 
   GoogleAuthProvider, signOut 
@@ -151,6 +151,9 @@ export default function App() {
               console.error("Error creating default profile in Firestore: ", err);
             }
           }
+        }, (error) => {
+          console.error("Failed to sync user profile: ", error);
+          handleFirestoreError(error, OperationType.GET, `users/${currentUser.uid}`);
         });
 
         setLoading(false);
@@ -196,6 +199,7 @@ export default function App() {
       setSchoolMatches(matchesList);
     }, (error) => {
       console.error("Failed to query school matches: ", error);
+      handleFirestoreError(error, OperationType.LIST, 'schoolMatches');
     });
 
     return () => unsubMatches();

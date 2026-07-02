@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Plus, Trophy, Shield, Search, ArrowRight, User, Trash2 } from 'lucide-react';
-import { db, auth } from '../firebase';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot } from 'firebase/firestore';
 import { SchoolMatch, UserProfile } from '../types';
 
@@ -48,6 +48,7 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
       setPlayerProfiles(profiles);
     }, (err) => {
       console.error("Error loading profiles in LeagueMatchesSection:", err);
+      handleFirestoreError(err, OperationType.LIST, 'playerProfiles');
     });
     return () => unsub();
   }, []);

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Award, Shield, User, Edit3, Save, Flame, Trophy, TrendingUp, Sparkles } from 'lucide-react';
-import { db, auth } from '../firebase';
+import { Award, Shield, User, Edit3, Save, Flame, Trophy, TrendingUp, Sparkles, Upload } from 'lucide-react';
+import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { doc, setDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore';
 import { UserProfile, SchoolMatch, PlayerStanding } from '../types';
 
@@ -52,6 +52,56 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
   const [customPlayerName, setCustomPlayerName] = useState('');
   const [customPlayerPhotoURL, setCustomPlayerPhotoURL] = useState('');
   const [isSavingPhoto, setIsSavingPhoto] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please select an image file.');
+      return;
+    }
+
+    setUploadError('');
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 160;
+        const MAX_HEIGHT = 160;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          setCustomPlayerPhotoURL(dataUrl);
+        }
+      };
+      img.onerror = () => {
+        setUploadError('Failed to load image.');
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Detect isAdmin
   const isAdmin = 
@@ -73,6 +123,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
       setPlayerProfiles(profiles);
     }, (err) => {
       console.error("Error loading player profiles:", err);
+      handleFirestoreError(err, OperationType.LIST, 'playerProfiles');
     });
     return () => unsub();
   }, []);
@@ -677,6 +728,28 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 block">Or Upload from Device</label>
+                  <div className="flex items-center justify-center w-full">
+                    <label className="flex flex-col items-center justify-center w-full h-20 border border-dashed border-slate-700 rounded-lg cursor-pointer bg-[#1A2238] hover:bg-[#202942] hover:border-slate-600 transition-colors">
+                      <div className="flex flex-col items-center justify-center pt-3 pb-3 text-center">
+                        <Upload className="w-5 h-5 text-slate-400 mb-1" />
+                        <p className="text-[10px] text-slate-400"><span className="font-semibold text-orange-400">Click to upload photo</span></p>
+                        <p className="text-[9px] text-slate-500">Auto-compressed for database storage</p>
+                      </div>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={handleFileUpload} 
+                      />
+                    </label>
+                  </div>
+                  {uploadError && (
+                    <p className="text-red-400 text-[9px] font-semibold mt-1">{uploadError}</p>
+                  )}
                 </div>
 
                 <div className="space-y-1">
