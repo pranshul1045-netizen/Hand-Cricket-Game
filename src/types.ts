@@ -88,3 +88,14 @@ export interface GameState {
   lastPlayerMove: number | null;
   lastCpuMove: number | null;
 }
+
+export interface LeagueUpdate {
+  id: string;
+  title: string;
+  content: string;
+  category: 'Announcement' | 'Match Update' | 'Rule Change' | 'General';
+  date: string;
+  creatorId: string;
+  creatorName: string;
+  createdAt: string;
+}

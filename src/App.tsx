@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Trophy, Gamepad2, BookOpen, Sparkles, LogIn, LogOut, 
-  User, Loader2, Calendar, ShieldAlert, CheckCircle2 
+  User, Loader2, Calendar, ShieldAlert, CheckCircle2, Megaphone
 } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { 
@@ -18,6 +18,7 @@ import DashboardSection from './components/DashboardSection';
 import DigitalGameSection from './components/DigitalGameSection';
 import LeagueMatchesSection from './components/LeagueMatchesSection';
 import RulesSection from './components/RulesSection';
+import UpdatesSection from './components/UpdatesSection';
 
 const DEFAULT_DEMO_MATCHES: SchoolMatch[] = [
   {
@@ -104,7 +105,7 @@ export default function App() {
 
   const [schoolMatches, setSchoolMatches] = useState<SchoolMatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'league' | 'rules'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'league' | 'rules' | 'updates'>('dashboard');
 
   // Login states
   const [loginMode, setLoginMode] = useState<'guest' | 'admin'>('guest');
@@ -516,6 +517,12 @@ export default function App() {
             onDeleteMatch={handleDeleteLocalMatch}
           />
         )}
+        {activeTab === 'updates' && (
+          <UpdatesSection 
+            userProfile={userProfile}
+            isAdmin={isAdmin}
+          />
+        )}
         {activeTab === 'rules' && (
           <RulesSection />
         )}
@@ -547,6 +554,19 @@ export default function App() {
         >
           <Gamepad2 className="w-4 h-4" />
           <span className="font-display">Play Game</span>
+        </button>
+
+        {/* Updates Tab */}
+        <button
+          onClick={() => setActiveTab('updates')}
+          className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
+            activeTab === 'updates'
+              ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
+              : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
+          }`}
+        >
+          <Megaphone className="w-4 h-4" />
+          <span className="font-display">Updates</span>
         </button>
 
         {/* School yard Leagues Tab */}

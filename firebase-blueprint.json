@@ -66,6 +66,21 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["playerName", "matchesPlayed", "matchesWon", "matchesLost", "totalRunsScored", "totalRunsConceded", "points", "updatedAt"]
+    },
+    "LeagueUpdate": {
+      "title": "LeagueUpdate",
+      "description": "Official announcements, news, and updates for HCL",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "content", "category", "date", "creatorId", "creatorName", "createdAt"]
     }
   },
   "firestore": {
@@ -84,6 +99,10 @@
     "/standings/{standingId}": {
       "schema": "PlayerStanding",
       "description": "Player league standings"
+    },
+    "/leagueUpdates/{updateId}": {
+      "schema": "LeagueUpdate",
+      "description": "HCL news and updates published by admins"
     }
   }
 }
