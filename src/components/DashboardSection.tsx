@@ -178,7 +178,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
     }
   }, [userProfile]);
 
-  // Compute stats dynamically from school matches for real-time Orange & Purple caps!
+  // Compute stats dynamically from school matches for real-time Orange & Purple bands!
   const playerStatsMap: Record<string, {
     name: string;
     runsScored: number;
@@ -241,11 +241,11 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
 
   const playersArray = Object.values(playerStatsMap);
 
-  // Orange Cap (Most Runs Scored)
-  const orangeCapWinner = [...playersArray].sort((a, b) => b.runsScored - a.runsScored)[0] || null;
+  // Orange Band (Most Runs Scored)
+  const orangeBandWinner = [...playersArray].sort((a, b) => b.runsScored - a.runsScored)[0] || null;
 
-  // Purple Cap (Lowest Total Runs Conceded, minimum 1 match played)
-  const purpleCapWinner = [...playersArray]
+  // Purple Band (Lowest Total Runs Conceded, minimum 1 match played)
+  const purpleBandWinner = [...playersArray]
     .filter(p => p.matchesPlayed > 0)
     .sort((a, b) => {
       if (a.runsConceded !== b.runsConceded) {
@@ -310,7 +310,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
               Hand Cricket League Dashboard
             </h1>
             <p className="text-slate-400 max-w-xl text-sm md:text-base font-sans">
-              Welcome back, <span className="font-bold text-orange-400">{userProfile?.displayName || 'Player'}</span>! Track your schoolyard runs, view dynamic cap tables, and play the digital arena game.
+              Welcome back, <span className="font-bold text-orange-400">{userProfile?.displayName || 'Player'}</span>! Track your schoolyard runs, view dynamic band tables, and play the digital arena game.
             </p>
           </div>
           <button
@@ -322,9 +322,9 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
         </div>
       </section>
 
-      {/* Caps Arena - Orange & Purple Caps */}
+      {/* Bands Arena - Orange & Purple Bands */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Orange Cap Card */}
+        {/* Orange Band Card */}
         <div className="bg-[#161D2F] border border-slate-700 border-l-4 border-l-orange-500 text-slate-200 rounded-2xl p-6 shadow-md relative overflow-hidden group">
           <div className="absolute right-[-10px] bottom-[-10px] opacity-5 text-orange-500 transform group-hover:scale-110 transition-transform duration-500">
             <Trophy className="w-40 h-40" />
@@ -332,49 +332,49 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
           <div className="relative z-10 space-y-4">
             <div className="flex justify-between items-center">
               <span className="bg-orange-500/10 border border-orange-500/20 text-orange-400 px-3 py-1 rounded text-xs font-mono font-bold tracking-widest uppercase">
-                Orange Cap
+                Orange Band
               </span>
               <Award className="w-6 h-6 text-orange-400 fill-orange-400/20" />
             </div>
-            {orangeCapWinner ? (
+            {orangeBandWinner ? (
               <div className="space-y-1">
                 <p className="text-xs uppercase font-mono tracking-wider text-slate-400">Leading Run Scorer</p>
                 <div className="flex items-center gap-3 py-1">
                   <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-600 bg-slate-800 flex items-center justify-center flex-shrink-0">
-                    {playerProfiles[orangeCapWinner.name.toLowerCase()] ? (
+                    {playerProfiles[orangeBandWinner.name.toLowerCase()] ? (
                       <img 
-                        src={playerProfiles[orangeCapWinner.name.toLowerCase()]} 
-                        alt={orangeCapWinner.name} 
+                        src={playerProfiles[orangeBandWinner.name.toLowerCase()]} 
+                        alt={orangeBandWinner.name} 
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className={`w-full h-full bg-gradient-to-br ${getGradientByName(orangeCapWinner.name)} flex items-center justify-center text-white text-sm font-bold font-display uppercase`}>
-                        {orangeCapWinner.name.charAt(0)}
+                      <div className={`w-full h-full bg-gradient-to-br ${getGradientByName(orangeBandWinner.name)} flex items-center justify-center text-white text-sm font-bold font-display uppercase`}>
+                        {orangeBandWinner.name.charAt(0)}
                       </div>
                     )}
                   </div>
                   <h3 className="font-display font-black text-3xl text-white tracking-tight">
-                    {orangeCapWinner.name}
+                    {orangeBandWinner.name}
                   </h3>
                 </div>
                 <div className="flex items-baseline gap-1">
-                  <span className="font-display font-black text-5xl text-orange-400">{orangeCapWinner.runsScored}</span>
+                  <span className="font-display font-black text-5xl text-orange-400">{orangeBandWinner.runsScored}</span>
                   <span className="text-sm font-semibold text-slate-400">Runs</span>
                 </div>
                 <p className="text-xs text-slate-400 font-sans">
-                  Scored across {orangeCapWinner.matchesPlayed} match(es) played at school.
+                  Scored across {orangeBandWinner.matchesPlayed} match(es) played at school.
                 </p>
               </div>
             ) : (
               <div className="py-6 text-center text-slate-400 text-sm">
-                No official runs registered yet. Add school matches to trigger cap nominations!
+                No official runs registered yet. Add school matches to trigger band nominations!
               </div>
             )}
           </div>
         </div>
 
-        {/* Purple Cap Card */}
+        {/* Purple Band Card */}
         <div className="bg-[#161D2F] border border-slate-700 border-l-4 border-l-purple-500 text-slate-200 rounded-2xl p-6 shadow-md relative overflow-hidden group">
           <div className="absolute right-[-10px] bottom-[-10px] opacity-5 text-purple-500 transform group-hover:scale-110 transition-transform duration-500">
             <Shield className="w-40 h-40" />
@@ -382,45 +382,45 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
           <div className="relative z-10 space-y-4">
             <div className="flex justify-between items-center">
               <span className="bg-purple-500/10 border border-purple-500/20 text-purple-400 px-3 py-1 rounded text-xs font-mono font-bold tracking-widest uppercase">
-                Purple Cap
+                Purple Band
               </span>
               <Award className="w-6 h-6 text-purple-400 fill-purple-400/20" />
             </div>
-            {purpleCapWinner ? (
+            {purpleBandWinner ? (
               <div className="space-y-1">
                 <p className="text-xs uppercase font-mono tracking-wider text-slate-400">Most Restrictive Bowler</p>
                 <div className="flex items-center gap-3 py-1">
                   <div className="w-10 h-10 rounded-full overflow-hidden border border-slate-600 bg-slate-800 flex items-center justify-center flex-shrink-0">
-                    {playerProfiles[purpleCapWinner.name.toLowerCase()] ? (
+                    {playerProfiles[purpleBandWinner.name.toLowerCase()] ? (
                       <img 
-                        src={playerProfiles[purpleCapWinner.name.toLowerCase()]} 
-                        alt={purpleCapWinner.name} 
+                        src={playerProfiles[purpleBandWinner.name.toLowerCase()]} 
+                        alt={purpleBandWinner.name} 
                         className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
                       />
                     ) : (
-                      <div className={`w-full h-full bg-gradient-to-br ${getGradientByName(purpleCapWinner.name)} flex items-center justify-center text-white text-sm font-bold font-display uppercase`}>
-                        {purpleCapWinner.name.charAt(0)}
+                      <div className={`w-full h-full bg-gradient-to-br ${getGradientByName(purpleBandWinner.name)} flex items-center justify-center text-white text-sm font-bold font-display uppercase`}>
+                        {purpleBandWinner.name.charAt(0)}
                       </div>
                     )}
                   </div>
                   <h3 className="font-display font-black text-3xl text-white tracking-tight">
-                    {purpleCapWinner.name}
+                    {purpleBandWinner.name}
                   </h3>
                 </div>
                 <div className="flex items-baseline gap-1">
                   <span className="font-display font-black text-5xl text-purple-400">
-                    {purpleCapWinner.runsConceded}
+                    {purpleBandWinner.runsConceded}
                   </span>
                   <span className="text-sm font-semibold text-slate-400">Runs Conceded</span>
                 </div>
                 <p className="text-xs text-slate-400 font-sans">
-                  An average of {(purpleCapWinner.runsConceded / purpleCapWinner.matchesPlayed).toFixed(1)} runs conceded per match across {purpleCapWinner.matchesPlayed} match(es).
+                  An average of {(purpleBandWinner.runsConceded / purpleBandWinner.matchesPlayed).toFixed(1)} runs conceded per match across {purpleBandWinner.matchesPlayed} match(es).
                 </p>
               </div>
             ) : (
               <div className="py-6 text-center text-slate-400 text-sm">
-                No bowling stats registered yet. Add matches to claim the Purple Cap!
+                No bowling stats registered yet. Add matches to claim the Purple Band!
               </div>
             )}
           </div>
