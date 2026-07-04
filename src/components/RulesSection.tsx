@@ -137,6 +137,35 @@ export default function RulesSection() {
             </div>
           </div>
         </div>
+
+        {/* League Format & Playoff Qualification */}
+        <div className="bg-[#161D2F] border border-slate-700 p-6 rounded-xl shadow-lg space-y-4 md:col-span-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-orange-500/10 text-orange-400 rounded-lg flex items-center justify-center border border-orange-500/20">
+              <User className="w-5 h-5 text-orange-400" />
+            </div>
+            <h3 className="font-display font-bold text-lg text-slate-100 uppercase tracking-tight">League Format & Playoff Qualification</h3>
+          </div>
+          <div className="space-y-3 text-sm text-slate-300">
+            <p className="leading-relaxed">
+              To keep the league completely fair and competitive, we enforce a strict round-robin matches cycle:
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-[#1A2238] p-3 rounded-lg border border-slate-700 space-y-1.5">
+                <h4 className="font-bold text-orange-400 text-xs uppercase tracking-wider font-mono">📅 Double Round-Robin</h4>
+                <p className="text-xs text-slate-400">
+                  Every team / player will play exactly <strong>two matches with the same opponent</strong> (one Home and one Away style) in the regular Group Stage.
+                </p>
+              </div>
+              <div className="bg-[#1A2238] p-3 rounded-lg border border-slate-700 space-y-1.5">
+                <h4 className="font-bold text-purple-400 text-xs uppercase tracking-wider font-mono">🏆 Playoffs Qualification</h4>
+                <p className="text-xs text-slate-400">
+                  All standard played matches default to <strong>Group Stage</strong>. After completing all regular matches, the <strong>Top 4 players</strong> qualify for the playoffs (Semifinal 1, Semifinal 2, and the Final).
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );

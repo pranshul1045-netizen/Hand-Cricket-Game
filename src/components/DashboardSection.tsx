@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Award, Shield, User, Edit3, Save, Flame, Trophy, TrendingUp, Sparkles, Upload } from 'lucide-react';
+import { Award, Shield, User, Edit3, Save, Flame, Trophy, TrendingUp, Sparkles, Upload, Target, Activity, BarChart2 } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { doc, setDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore';
 import { UserProfile, SchoolMatch, PlayerStanding } from '../types';
@@ -53,6 +53,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
   const [customPlayerPhotoURL, setCustomPlayerPhotoURL] = useState('');
   const [isSavingPhoto, setIsSavingPhoto] = useState(false);
   const [uploadError, setUploadError] = useState('');
+  const [selectedScenarioPlayer, setSelectedScenarioPlayer] = useState<string | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -263,6 +264,36 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
     return b.runsScored - a.runsScored;
   });
 
+  // Calculate playoff race parameters dynamically based on Double Round-Robin (2 matches with same team)
+  // Each team plays exactly 2 matches against each other opponent.
+  const targetMatches = sortedStandings.length > 1 ? (sortedStandings.length - 1) * 2 : 10;
+
+  const getPlayoffStatus = (player: any, index: number) => {
+    if (sortedStandings.length <= 4) {
+      return player.matchesPlayed > 0 ? 'Qualified' : 'In Contention';
+    }
+    
+    const fourthPlacePoints = sortedStandings[3]?.points || 0;
+    
+    // Find max possible points of anyone currently in 5th place or below
+    const lowerBracketPlayers = sortedStandings.slice(4);
+    const maxPossiblePointsForLowerBracket = lowerBracketPlayers.length > 0
+      ? Math.max(...lowerBracketPlayers.map(p => p.points + Math.max(0, targetMatches - p.matchesPlayed) * 2))
+      : 0;
+      
+    const remMatches = Math.max(0, targetMatches - player.matchesPlayed);
+    const playerMaxPts = player.points + remMatches * 2;
+    const playerMinPts = player.points;
+    
+    if (playerMaxPts < fourthPlacePoints) {
+      return 'Eliminated';
+    } else if (playerMinPts > maxPossiblePointsForLowerBracket && index < 4) {
+      return 'Qualified';
+    } else {
+      return 'In Contention';
+    }
+  };
+
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
@@ -446,6 +477,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                 <tr className="border-b border-slate-700 text-[10px] md:text-xs font-mono font-bold text-slate-400 bg-[#1A2238]">
                   <th className="py-3 px-2 text-center w-12 border-r border-slate-700">Pos</th>
                   <th className="py-3 px-3">Player</th>
+                  <th className="py-3 px-2 text-center w-28 border-l border-r border-slate-700">Playoff Status</th>
                   <th className="py-3 px-2 text-center w-16">Played</th>
                   <th className="py-3 px-2 text-center w-12">W</th>
                   <th className="py-3 px-2 text-center w-12">L</th>
@@ -492,6 +524,29 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                         )}
                       </div>
                     </td>
+                    <td className="py-2.5 px-2 text-center border-l border-r border-slate-800/50 bg-[#1A2238]/20">
+                      {(() => {
+                        const status = getPlayoffStatus(standing, index);
+                        return (
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold font-mono tracking-wide border ${
+                            status === 'Qualified'
+                              ? 'bg-green-500/10 text-green-400 border-green-500/25'
+                              : status === 'Eliminated'
+                              ? 'bg-red-500/10 text-red-400 border-red-500/25'
+                              : 'bg-blue-500/10 text-blue-400 border-blue-500/25'
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${
+                              status === 'Qualified'
+                                ? 'bg-green-400 animate-pulse'
+                                : status === 'Eliminated'
+                                ? 'bg-red-400'
+                                : 'bg-blue-400'
+                            }`}></span>
+                            {status === 'Qualified' ? 'QUALIFIED' : status === 'Eliminated' ? 'ELIMINATED' : 'CONTENDING'}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td className="py-3 px-2 text-center text-slate-400 font-mono">
                       {standing.matchesPlayed}
                     </td>
@@ -523,13 +578,279 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                 ))}
                 {sortedStandings.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="py-8 text-center text-slate-400 text-sm">
+                    <td colSpan={10} className="py-8 text-center text-slate-400 text-sm">
                       No matching records found. Create an Admin profile or log in to register official matches!
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
+          </div>
+
+          {/* Interactive Playoff Qualification Scenario Panel */}
+          <div className="bg-[#1A2238] border border-slate-700/60 rounded-xl p-4 mt-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Award className="w-4.5 h-4.5 text-orange-400" />
+              <h4 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-200">
+                Playoff Qualification Scenarios (Top 4 Semis)
+              </h4>
+            </div>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              {sortedStandings.length <= 4 ? (
+                <span>
+                  Currently, there are only <strong className="text-orange-400">{sortedStandings.length}</strong> active player(s) in the league. Since 4 players are needed to populate the Semifinal bracket, <strong>all registered players will qualify</strong> for the playoffs automatically! Add more players to spark a fierce qualification battle.
+                </span>
+              ) : (
+                <span>
+                  The <strong>Top 4 players</strong> in the standings qualify for the <strong>Semifinals (SF 1 & SF 2)</strong>. Under the double round-robin format, <strong>each team plays exactly 2 matches against the same opponent</strong>, making the group stage target <strong className="text-orange-400">{targetMatches}</strong> matches per player. See individual qualification scenarios below:
+                </span>
+              )}
+            </p>
+            {sortedStandings.length > 4 && (
+              <div className="space-y-3 pt-1">
+                <p className="text-[11px] text-slate-400 font-mono italic">
+                  💡 Click on any player below to view their detailed double round-robin schedule and mathematical qualification scenarios:
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[11px] font-mono">
+                  {sortedStandings.map((p, idx) => {
+                    const status = getPlayoffStatus(p, idx);
+                    const rem = Math.max(0, targetMatches - p.matchesPlayed);
+                    const fourthPlaceName = sortedStandings[3]?.name || '4th place';
+                    const fourthPlacePts = sortedStandings[3]?.points || 0;
+                    
+                    // Math projections
+                    const maxPts = p.points + rem * 2;
+                    const minPts = p.points;
+                    
+                    // Teams strictly better than our max possible (we cannot beat them)
+                    const strictlyBetterCount = sortedStandings.filter(other => other.name !== p.name && other.points > maxPts).length;
+                    const highestRank = strictlyBetterCount + 1;
+                    
+                    // Teams that can potentially finish above or equal to us (if they win all games)
+                    const potentialBetterCount = sortedStandings.filter(other => {
+                      if (other.name === p.name) return false;
+                      const otherRem = Math.max(0, targetMatches - other.matchesPlayed);
+                      const otherMax = other.points + otherRem * 2;
+                      return otherMax >= p.points;
+                    }).length;
+                    const lowestRank = Math.min(sortedStandings.length, potentialBetterCount + 1);
+
+                    // Calculations for guaranteed qualification points
+                    const fifthPlacePlayer = sortedStandings[4];
+                    const fifthPlaceMaxPotential = fifthPlacePlayer 
+                      ? (fifthPlacePlayer.points + Math.max(0, targetMatches - fifthPlacePlayer.matchesPlayed) * 2)
+                      : 0;
+                    const ptsToGuarantee = fifthPlaceMaxPotential + 1;
+                    const ptsNeeded = Math.max(0, ptsToGuarantee - p.points);
+                    const winsNeeded = Math.ceil(ptsNeeded / 2);
+
+                    const isExpanded = selectedScenarioPlayer === p.name;
+
+                    // Opponents tracking for double round-robin (each must be played twice)
+                    const opponentsBreakdown = sortedStandings
+                      .filter(other => other.name !== p.name)
+                      .map(opp => {
+                        const matchesAgainstOpp = schoolMatches.filter(m => 
+                          m.status === 'completed' &&
+                          ((m.player1 === p.name && m.player2 === opp.name) || (m.player1 === opp.name && m.player2 === p.name))
+                        );
+                        const played = matchesAgainstOpp.length;
+                        const remaining = Math.max(0, 2 - played);
+                        const results = matchesAgainstOpp.map(m => {
+                          const isP1 = m.player1 === p.name;
+                          if (m.winner === 'tie' || m.winner === 'draw' || !m.winner) return 'D';
+                          if (m.winner === (isP1 ? 'player1' : 'player2') || m.winner === p.name) return 'W';
+                          return 'L';
+                        });
+                        return {
+                          opponentName: opp.name,
+                          played,
+                          remaining,
+                          results
+                        };
+                      });
+
+                    return (
+                      <div 
+                        key={p.name} 
+                        onClick={() => setSelectedScenarioPlayer(isExpanded ? null : p.name)}
+                        className={`bg-[#161D2F] border rounded-lg p-3 flex flex-col gap-2 hover:border-slate-600 transition-all cursor-pointer ${
+                          isExpanded ? 'border-orange-500/80 ring-1 ring-orange-500/20' : 'border-slate-800'
+                        }`}
+                      >
+                        {/* Header Row */}
+                        <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-slate-500 font-bold bg-slate-800 px-1.5 py-0.5 rounded">
+                              #{idx + 1}
+                            </span>
+                            <span className="font-bold text-slate-200">{p.name}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={`px-2 py-0.5 rounded text-[8px] font-bold ${
+                              status === 'Qualified'
+                                ? 'bg-green-500/15 text-green-400 border border-green-500/30'
+                                : status === 'Eliminated'
+                                ? 'bg-red-500/15 text-red-400 border border-red-500/30'
+                                : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                            }`}>
+                              {status === 'Qualified' ? 'QUALIFIED' : status === 'Eliminated' ? 'ELIMINATED' : 'CONTENDING'}
+                            </span>
+                            <span className="text-slate-500 hover:text-slate-300">
+                              {isExpanded ? '▲' : '▼'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Collapsed / Basic view */}
+                        <div className="grid grid-cols-3 text-center text-[10px] py-1">
+                          <div className="border-r border-slate-800/60">
+                            <span className="text-slate-500 block">Progress</span>
+                            <span className="font-bold text-slate-300">{p.matchesPlayed}/{targetMatches} games</span>
+                          </div>
+                          <div className="border-r border-slate-800/60">
+                            <span className="text-slate-500 block">Current Pts</span>
+                            <span className="font-bold text-orange-400">{p.points}</span>
+                          </div>
+                          <div>
+                            <span className="text-slate-500 block">Net RR</span>
+                            <span className="font-bold text-slate-300">{p.runRate > 0 ? `+${p.runRate}` : p.runRate}</span>
+                          </div>
+                        </div>
+
+                        {/* Expanded Deep Analysis */}
+                        {isExpanded && (
+                          <div className="border-t border-slate-800/80 pt-2.5 mt-1 space-y-3 text-[10.5px]" onClick={(e) => e.stopPropagation()}>
+                            {/* Point Potential Slider */}
+                            <div className="space-y-1 bg-[#1A2238]/40 p-2 rounded border border-slate-800/50">
+                              <div className="flex justify-between text-[10px] text-slate-400">
+                                <span>Points Potential Range</span>
+                                <span className="font-bold text-slate-300">{minPts} to {maxPts} Pts</span>
+                              </div>
+                              <div className="relative w-full h-2 bg-slate-800 rounded-full overflow-hidden flex">
+                                {/* Current Points percentage (of maximum possible league points) */}
+                                <div 
+                                  className="bg-gradient-to-r from-orange-500 to-amber-500 h-full rounded-l-full"
+                                  style={{ width: `${Math.min(100, (p.points / (targetMatches * 2)) * 100)}%` }}
+                                ></div>
+                                {/* Potential Points percentage */}
+                                <div 
+                                  className="bg-blue-500/40 h-full border-l border-dashed border-slate-600"
+                                  style={{ width: `${Math.min(100, ((rem * 2) / (targetMatches * 2)) * 100)}%` }}
+                                ></div>
+                              </div>
+                              <div className="flex justify-between text-[8px] text-slate-500 pt-0.5">
+                                <span>Current: {minPts} Pts</span>
+                                <span className="text-blue-400">Max Possible: {maxPts} Pts</span>
+                              </div>
+                            </div>
+
+                            {/* Rank Finish Projections */}
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="bg-slate-900/60 p-2 rounded border border-slate-800/50 text-center">
+                                <span className="text-[9px] text-slate-500 uppercase block font-bold tracking-wider">Best Possible Rank</span>
+                                <span className="text-xs font-extrabold text-green-400">Rank #{highestRank}</span>
+                              </div>
+                              <div className="bg-slate-900/60 p-2 rounded border border-slate-800/50 text-center">
+                                <span className="text-[9px] text-slate-500 uppercase block font-bold tracking-wider">Worst Possible Rank</span>
+                                <span className="text-xs font-extrabold text-red-400">Rank #{lowestRank}</span>
+                              </div>
+                            </div>
+
+                            {/* Double Round-Robin Schedule Status */}
+                            <div className="space-y-1.5">
+                              <h5 className="text-[9px] text-orange-400 font-extrabold uppercase tracking-wider flex items-center gap-1">
+                                <Activity className="w-3 h-3" /> Opponent Head-to-Head Tracker (Double RR)
+                              </h5>
+                              <div className="space-y-1">
+                                {opponentsBreakdown.map(opp => (
+                                  <div key={opp.opponentName} className="flex justify-between items-center bg-slate-900/30 px-2 py-1.5 rounded border border-slate-800/30">
+                                    <span className="text-slate-300 font-medium">{opp.opponentName}</span>
+                                    <div className="flex items-center gap-2">
+                                      <div className="flex gap-1">
+                                        {[0, 1].map(mIdx => {
+                                          const result = opp.results[mIdx];
+                                          const hasPlayed = mIdx < opp.played;
+                                          return (
+                                            <span 
+                                              key={mIdx} 
+                                              className={`w-4 h-4 rounded-full flex items-center justify-center text-[8px] font-bold border ${
+                                                hasPlayed
+                                                  ? result === 'W'
+                                                    ? 'bg-green-500/20 text-green-400 border-green-500/40'
+                                                    : result === 'L'
+                                                    ? 'bg-red-500/20 text-red-400 border-red-500/40'
+                                                    : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40'
+                                                  : 'bg-slate-800/40 text-slate-600 border-slate-700/50'
+                                              }`}
+                                              title={hasPlayed ? `Match ${mIdx + 1}: ${result}` : `Match ${mIdx + 1}: Remaining`}
+                                            >
+                                              {hasPlayed ? result : '•'}
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                      <span className={`text-[8px] font-bold ${opp.remaining === 0 ? 'text-green-400' : 'text-slate-500'}`}>
+                                        {opp.remaining === 0 ? 'COMPLETED' : `${opp.remaining} REMAINING`}
+                                      </span>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Custom Playoff Scenario Advice */}
+                            <div className="bg-slate-950/40 p-2.5 rounded border border-slate-800/80 text-[10px] text-slate-300 leading-relaxed space-y-1">
+                              <span className="font-extrabold text-orange-400 block uppercase tracking-wider text-[8px]">
+                                Playoff Mathematics & Road to Semifinals
+                              </span>
+                              {status === 'Qualified' ? (
+                                <span>
+                                  🏆 <strong>Playoff Spot Locked!</strong> {p.name} has mathematically guaranteed a spot in the Top 4 Semifinals. Remaining matches will determine final seeding positions (#1 to #{lowestRank}).
+                                </span>
+                              ) : status === 'Eliminated' ? (
+                                <span>
+                                  ❌ <strong>Out of Contention:</strong> Even if {p.name} wins all {rem} remaining match{rem !== 1 ? 'es' : ''}, they can at best reach {maxPts} points, which is less than 4th place's current score of {fourthPlacePts} pts.
+                                </span>
+                              ) : (
+                                <div className="space-y-1.5">
+                                  <div>
+                                    {idx >= 4 ? (
+                                      <span>
+                                        🎯 <strong>Chasing the Top 4:</strong> Currently in Rank #{idx + 1}. Needs to gain at least <strong>{fourthPlacePts - p.points + 1} more points</strong> to leapfrog {fourthPlaceName} for the final playoff spot.
+                                      </span>
+                                    ) : (
+                                      <span>
+                                        🛡️ <strong>Defending Playoff Berth:</strong> Currently in Rank #{idx + 1} and inside the qualifying bracket. Must protect this spot from {sortedStandings[4]?.name || 'chasing players'} who are hunting from below.
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="border-t border-slate-800/50 pt-1 text-[9.5px]">
+                                    {ptsNeeded <= 0 ? (
+                                      <span className="text-green-400">
+                                        ⚡ Highly likely to qualify! A single draw or favorable outcome seals the deal.
+                                      </span>
+                                    ) : ptsNeeded > rem * 2 ? (
+                                      <span className="text-amber-400 font-bold">
+                                        ⚠️ Needs Help: Even winning every remaining game leaves {p.name} at {maxPts} points. They need chasing teams to drop matches to sneak in.
+                                      </span>
+                                    ) : (
+                                      <span>
+                                        🔑 <strong>Self-Determination:</strong> Needs at least <strong className="text-orange-400">{ptsNeeded} points ({winsNeeded} win{winsNeeded !== 1 ? 's' : ''})</strong> from {rem} remaining game{rem !== 1 ? 's' : ''} to mathematically secure a Top 4 spot on their own merit.
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
