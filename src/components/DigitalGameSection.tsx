@@ -326,6 +326,8 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
   const { batsman: currentBatsman, bowler: currentBowler, isP1Batting: isPlayerBattingNow } = getMatchRoles();
   const currentBatterScore = isPlayerBattingNow ? p1Runs : p2Runs;
   const currentBowlerScore = isPlayerBattingNow ? p2Runs : p1Runs;
+  const bowlerMove = isPlayerBattingNow ? lastP2Move : lastP1Move;
+  const batsmanMove = isPlayerBattingNow ? lastP1Move : lastP2Move;
 
   // Win Probability calculation
   const getWinProbability = () => {
@@ -526,34 +528,45 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
                 <Shield className="w-52 h-52 text-white" />
               </div>
               <div className="relative z-10 flex justify-between items-start">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400">
-                    Current Score ({currentBatsman} Batting)
-                  </span>
-                  <div className="flex items-baseline gap-1">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
+                    <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                      Live Broadcast • {currentBatsman} is Batting
+                    </span>
+                  </div>
+                  <div className="flex items-baseline gap-1.5">
                     <span className="font-display font-black text-5xl md:text-6xl text-slate-100 leading-none">{currentBatterScore}</span>
-                    <span className="text-lg font-bold text-slate-500">/ 0 (Wkts)</span>
+                    <span className="text-xl font-bold text-slate-500">/ 0 (Wickets)</span>
                   </div>
                 </div>
 
                 {target !== null && (
                   <div className="text-right space-y-1">
-                    <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-slate-400">
+                    <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-purple-400 block">
                       Target to Win
                     </span>
-                    <div className="font-display font-black text-3xl text-purple-400">
+                    <div className="font-display font-black text-3xl text-purple-400 font-mono">
                       {target}
                     </div>
                   </div>
                 )}
               </div>
 
-              <div className="mt-6 flex flex-wrap gap-4 z-10">
+              {/* Roles Summary Badges */}
+              <div className="mt-6 flex flex-wrap gap-2.5 z-10 items-center">
                 <div className="bg-orange-500/10 border border-orange-500/20 text-orange-400 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold">
-                  <Zap className="w-3.5 h-3.5 fill-current text-orange-400 animate-pulse" />
                   <span className="font-mono tracking-wider uppercase">
-                    INNINGS {currentInnings} ({selectedRole?.toUpperCase() === 'batting' && currentInnings === 1 ? 'YOU BATTING' : selectedRole?.toUpperCase() === 'bowling' && currentInnings === 1 ? 'YOU BOWLING' : currentInnings === 2 && selectedRole?.toUpperCase() === 'batting' ? 'YOU BOWLING' : 'YOU BATTING'})
+                    🏏 {currentBatsman} (Batting)
                   </span>
+                </div>
+                <div className="bg-purple-500/10 border border-purple-500/20 text-purple-400 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold">
+                  <span className="font-mono tracking-wider uppercase">
+                    🥎 {currentBowler} (Bowling)
+                  </span>
+                </div>
+                <div className="bg-slate-800 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-bold font-mono uppercase tracking-wider ml-auto">
+                  Innings {currentInnings} • {isPlayerBattingNow ? 'YOU BATTING' : 'YOU BOWLING'}
                 </div>
               </div>
             </div>
@@ -579,45 +592,90 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
             </div>
           </div>
 
-          {/* The Pitch (Visual Action Area) */}
-          <div className="relative bg-gradient-to-b from-orange-500/5 via-[#161D2F] to-[#1A2238] rounded-3xl p-6 md:p-8 border border-slate-700 shadow-xl min-h-[300px] flex flex-col justify-between">
-            <div className="grid grid-cols-3 items-center gap-4 py-6">
-              {/* Bowler Hand Gesture */}
-              <div className="flex flex-col items-center gap-2">
-                <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">
+          {/* The Pitch (Visual Action Area) - High Contrast Battle Arena */}
+          <div className="relative bg-gradient-to-b from-[#121824] to-[#1A2238] rounded-3xl p-6 md:p-8 border border-slate-700 shadow-xl min-h-[320px] flex flex-col justify-between overflow-hidden">
+            {/* Ambient Grass Pitch Lines decoration */}
+            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-slate-800/50"></div>
+            <div className="absolute left-1/2 top-0 bottom-0 w-[2px] bg-slate-800/50 -translate-x-1/2 border-dashed border-r border-slate-700/30"></div>
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-20 h-20 rounded-full border-2 border-slate-800/50"></div>
+
+            <div className="relative z-10 grid grid-cols-1 md:grid-cols-7 items-center gap-6 py-4">
+              {/* Bowler Card - Left Side (Blue/Purple Theme) */}
+              <div className={`md:col-span-3 flex flex-col items-center p-6 rounded-2xl border transition-all ${
+                !isPlayerBattingNow 
+                  ? 'bg-purple-950/15 border-purple-500/40 shadow-[0_0_20px_rgba(168,85,247,0.12)] ring-1 ring-purple-500/30' 
+                  : 'bg-[#161D2F]/80 border-slate-700/60'
+              }`}>
+                {/* Bowler Role Badge */}
+                <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-3.5 py-1 rounded-full text-[10px] font-mono font-bold tracking-widest uppercase flex items-center gap-1.5 mb-3">
+                  🥎 BOWLING
+                </span>
+                
+                {/* Bowler Name */}
+                <h4 className="font-display font-black text-xl text-slate-100 uppercase tracking-tight">
                   {currentBowler}
-                </span>
-                <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-purple-500/5 border-4 border-[#1A2238] flex items-center justify-center text-4xl shadow-lg shadow-purple-500/5">
-                  {lastP2Move ? handGestures[lastP2Move]?.icon : '❓'}
+                </h4>
+                <p className="text-[10px] font-mono text-slate-400 mb-4 font-bold tracking-wider">
+                  {!isPlayerBattingNow ? '👤 (YOU)' : '🤖 (CPU)'}
+                </p>
+
+                {/* Bowler Gesture Circle */}
+                <div className={`w-24 h-24 md:w-28 md:h-28 rounded-full flex items-center justify-center text-4xl shadow-lg border-4 transition-all duration-300 ${
+                  bowlerMove 
+                    ? 'bg-purple-500/15 border-purple-500/40 scale-105 shadow-purple-500/15' 
+                    : 'bg-slate-800/50 border-slate-700'
+                }`}>
+                  {bowlerMove ? handGestures[bowlerMove]?.icon : '❓'}
                 </div>
-                <span className="text-xs font-mono font-bold text-slate-400">
-                  {lastP2Move ? `Played ${lastP2Move}` : 'Ready...'}
+
+                <span className="text-xs font-mono font-bold text-purple-300 mt-4 h-5">
+                  {bowlerMove ? `Played Gesture ${bowlerMove}` : 'Ready to bowl...'}
                 </span>
               </div>
 
-              {/* Central VS */}
-              <div className="text-center">
-                <span className="font-display font-black text-3xl text-slate-800 select-none">
+              {/* Central VS Badge */}
+              <div className="md:col-span-1 flex flex-col items-center justify-center py-4 md:py-0">
+                <div className="w-12 h-12 rounded-full bg-slate-900 border-2 border-slate-700 flex items-center justify-center font-display font-black text-xs text-orange-400 select-none shadow-xl">
                   VS
-                </span>
+                </div>
               </div>
 
-              {/* Batter Hand Gesture */}
-              <div className="flex flex-col items-center gap-2">
-                <span className="text-[10px] font-mono font-bold text-orange-400 uppercase tracking-widest">
-                  {currentBatsman}
+              {/* Batter Card - Right Side (Orange/Gold Theme) */}
+              <div className={`md:col-span-3 flex flex-col items-center p-6 rounded-2xl border transition-all ${
+                isPlayerBattingNow 
+                  ? 'bg-orange-950/15 border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.12)] ring-1 ring-orange-500/30' 
+                  : 'bg-[#161D2F]/80 border-slate-700/60'
+              }`}>
+                {/* Batter Role Badge */}
+                <span className="bg-orange-500/20 text-orange-300 border border-orange-500/30 px-3.5 py-1 rounded-full text-[10px] font-mono font-bold tracking-widest uppercase flex items-center gap-1.5 mb-3">
+                  🏏 BATTING
                 </span>
-                <div className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-orange-500/5 border-4 border-[#1A2238] flex items-center justify-center text-4xl shadow-lg shadow-orange-500/5">
-                  {lastP1Move ? handGestures[lastP1Move]?.icon : '👋'}
+
+                {/* Batter Name */}
+                <h4 className="font-display font-black text-xl text-slate-100 uppercase tracking-tight">
+                  {currentBatsman}
+                </h4>
+                <p className="text-[10px] font-mono text-slate-400 mb-4 font-bold tracking-wider">
+                  {isPlayerBattingNow ? '👤 (YOU)' : '🤖 (CPU)'}
+                </p>
+
+                {/* Batter Gesture Circle */}
+                <div className={`w-24 h-24 md:w-28 md:h-28 rounded-full flex items-center justify-center text-4xl shadow-lg border-4 transition-all duration-300 ${
+                  batsmanMove 
+                    ? 'bg-orange-500/15 border-orange-500/40 scale-105 shadow-orange-500/15' 
+                    : 'bg-slate-800/50 border-slate-700'
+                }`}>
+                  {batsmanMove ? handGestures[batsmanMove]?.icon : '👋'}
                 </div>
-                <span className="text-xs font-mono font-bold text-orange-400">
-                  {lastP1Move ? `Played ${lastP1Move}` : 'Ready...'}
+
+                <span className="text-xs font-mono font-bold text-orange-300 mt-4 h-5">
+                  {batsmanMove ? `Played Gesture ${batsmanMove}` : 'Ready to bat...'}
                 </span>
               </div>
             </div>
 
             {/* Commentary Overlay */}
-            <div className="bg-[#1A2238]/90 backdrop-blur-md px-6 py-3 rounded-full border border-slate-700 text-center max-w-md mx-auto shadow-xl">
+            <div className="relative z-10 bg-[#1A2238]/95 backdrop-blur-md px-6 py-3 rounded-full border border-slate-700 text-center max-w-md mx-auto shadow-2xl mt-4">
               <p className={`font-sans text-xs md:text-sm italic font-bold ${commentaryColor}`} id="commentary-text">
                 {commentary}
               </p>

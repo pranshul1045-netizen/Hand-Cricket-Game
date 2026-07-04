@@ -22,6 +22,7 @@ export interface SchoolMatch {
   winner?: string; // Player name or "player1" | "player2"
   status: 'completed' | 'scheduled';
   date?: string; // Date of match e.g. "2026-07-01"
+  stage?: 'Group Stage' | 'Semifinal 1' | 'Semifinal 2' | 'Final';
   creatorId: string;
   createdAt: any;
 }

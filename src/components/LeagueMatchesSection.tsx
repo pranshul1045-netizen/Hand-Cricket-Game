@@ -63,6 +63,7 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
   const [player2Conceded, setPlayer2Conceded] = useState<number>(0);
   const [winner, setWinner] = useState<'player1' | 'player2' | 'tie'>('player1');
   const [status, setStatus] = useState<'completed' | 'scheduled'>('completed');
+  const [stage, setStage] = useState<'Group Stage' | 'Semifinal 1' | 'Semifinal 2' | 'Final'>('Group Stage');
   const [matchDate, setMatchDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -85,6 +86,7 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
       winner: calculatedWinner,
       status,
       date: matchDate,
+      stage,
       creatorId: auth.currentUser?.uid || 'guest_local',
       createdAt: new Date().toISOString()
     };
@@ -105,6 +107,7 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
       setPlayer2Runs(0);
       setPlayer1Conceded(0);
       setPlayer2Conceded(0);
+      setStage('Group Stage');
       setShowAddForm(false);
     } catch (err) {
       console.error("Error writing schoolyard match scorecard: ", err);
@@ -247,14 +250,14 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs pt-2">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs pt-2">
             {/* Match Winner */}
-            <div className="space-y-1">
+            <div className="space-y-1 col-span-2 md:col-span-1">
               <label className="font-bold text-slate-400 block">Winner</label>
               <select
                 value={winner}
                 onChange={(e: any) => setWinner(e.target.value)}
-                className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-orange-500"
+                className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-orange-500 cursor-pointer"
               >
                 <option value="player1">Player 1 Won</option>
                 <option value="player2">Player 2 Won</option>
@@ -263,7 +266,7 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
             </div>
 
             {/* Match Date */}
-            <div className="space-y-1">
+            <div className="space-y-1 col-span-2 md:col-span-1">
               <label className="font-bold text-slate-400 block">Match Date</label>
               <input
                 type="date"
@@ -274,13 +277,28 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
               />
             </div>
 
+            {/* Match Stage */}
+            <div className="space-y-1 col-span-2 md:col-span-1">
+              <label className="font-bold text-slate-400 block">Match Stage</label>
+              <select
+                value={stage}
+                onChange={(e: any) => setStage(e.target.value as any)}
+                className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-orange-500 cursor-pointer"
+              >
+                <option value="Group Stage">Group Stage</option>
+                <option value="Semifinal 1">Semifinal 1</option>
+                <option value="Semifinal 2">Semifinal 2</option>
+                <option value="Final">Final</option>
+              </select>
+            </div>
+
             {/* Match Status */}
-            <div className="space-y-1">
+            <div className="space-y-1 col-span-2 md:col-span-1">
               <label className="font-bold text-slate-400 block">Status</label>
               <select
                 value={status}
                 onChange={(e: any) => setStatus(e.target.value)}
-                className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-orange-500"
+                className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-orange-500 cursor-pointer"
               >
                 <option value="completed">Completed Scorecard</option>
                 <option value="scheduled">Scheduled Fixture</option>
@@ -324,6 +342,15 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
                 <span className="font-mono">{match.date || 'School Yard Match'}</span>
               </div>
               <div className="flex items-center gap-2">
+                <span className={`px-2.5 py-0.5 font-mono font-bold text-[9px] uppercase tracking-wider rounded border ${
+                  (match.stage || 'Group Stage') === 'Final'
+                    ? 'bg-red-500/15 text-red-400 border-red-500/30 font-extrabold'
+                    : (match.stage || 'Group Stage').startsWith('Semifinal')
+                    ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
+                    : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                }`}>
+                  {match.stage || 'Group Stage'}
+                </span>
                 <span className={`px-2.5 py-0.5 font-mono font-bold text-[9px] uppercase tracking-wider rounded border ${
                   match.status === 'completed'
                     ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
