@@ -160,7 +160,7 @@ export default function RulesSection() {
               <div className="bg-[#1A2238] p-3 rounded-lg border border-slate-700 space-y-1.5">
                 <h4 className="font-bold text-purple-400 text-xs uppercase tracking-wider font-mono">🏆 Playoffs Qualification</h4>
                 <p className="text-xs text-slate-400">
-                  All standard played matches default to <strong>Group Stage</strong>. After completing all regular matches, the <strong>Top 4 players</strong> qualify for the playoffs (Semifinal 1, Semifinal 2, and the Final).
+                  All standard played matches default to <strong>Group Stage</strong>. After completing all regular matches, the <strong>Top 4 players</strong> qualify for the playoffs (Semifinal 1, Semifinal 2, and the Final). Crucially, securing <strong>7 wins</strong> during the regular Group Stage mathematically guarantees that a team / player is <strong>fully qualified</strong> for the playoffs!
                 </p>
               </div>
             </div>

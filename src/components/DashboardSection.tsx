@@ -273,6 +273,11 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
       return player.matchesPlayed > 0 ? 'Qualified' : 'In Contention';
     }
     
+    // 7 wins mathematically guarantees full qualification
+    if (player.won >= 7) {
+      return 'Qualified';
+    }
+    
     const fourthPlacePoints = sortedStandings[3]?.points || 0;
     
     // Find max possible points of anyone currently in 5th place or below
@@ -602,7 +607,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                 </span>
               ) : (
                 <span>
-                  The <strong>Top 4 players</strong> in the standings qualify for the <strong>Semifinals (SF 1 & SF 2)</strong>. Under the double round-robin format, <strong>each team plays exactly 2 matches against the same opponent</strong>, making the group stage target <strong className="text-orange-400">{targetMatches}</strong> matches per player. See individual qualification scenarios below:
+                  The <strong>Top 4 players</strong> in the standings qualify for the <strong>Semifinals (SF 1 & SF 2)</strong>. Under the double round-robin format, <strong>each team plays exactly 2 matches against the same opponent</strong>, making the group stage target <strong className="text-orange-400">{targetMatches}</strong> matches per player. Specifically, reaching <strong>7 wins will fully qualify</strong> a player for the playoffs automatically! See individual qualification scenarios below:
                 </span>
               )}
             </p>
@@ -836,7 +841,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                                       </span>
                                     ) : (
                                       <span>
-                                        🔑 <strong>Self-Determination:</strong> Needs at least <strong className="text-orange-400">{ptsNeeded} points ({winsNeeded} win{winsNeeded !== 1 ? 's' : ''})</strong> from {rem} remaining game{rem !== 1 ? 's' : ''} to mathematically secure a Top 4 spot on their own merit.
+                                        🔑 <strong>Self-Determination:</strong> Needs at least <strong className="text-orange-400">{ptsNeeded} points ({winsNeeded} win{winsNeeded !== 1 ? 's' : ''})</strong> from {rem} remaining game{rem !== 1 ? 's' : ''} to mathematically secure a Top 4 spot. Alternatively, reaching <strong>7 wins</strong> total (needs <strong>{Math.max(0, 7 - p.won)}</strong> more win{Math.max(0, 7 - p.won) !== 1 ? 's' : ''}) will fully qualify {p.name} automatically!
                                       </span>
                                     )}
                                   </div>
