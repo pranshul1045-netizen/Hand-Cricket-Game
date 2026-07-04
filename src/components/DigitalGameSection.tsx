@@ -298,8 +298,8 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
     }
 
     const { batsman, isP1Batting } = getMatchRoles();
-    const playerRuns = selectedRole === 'batting' ? p1Runs : p2Runs;
-    const cpuRuns = selectedRole === 'batting' ? p2Runs : p1Runs;
+    const playerRuns = p1Runs;
+    const cpuRuns = p2Runs;
     const didPlayerWin = playerRuns > cpuRuns;
 
     const matchId = `digital_${Date.now()}`;
@@ -749,8 +749,8 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
             
             {/* Display Victory or Defeat based on runs */}
             {(() => {
-              const playerRuns = selectedRole === 'batting' ? p1Runs : p2Runs;
-              const cpuRuns = selectedRole === 'batting' ? p2Runs : p1Runs;
+              const playerRuns = p1Runs;
+              const cpuRuns = p2Runs;
               const playerWin = playerRuns > cpuRuns;
 
               return (
@@ -774,11 +774,19 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
               <div className="absolute right-[-10px] bottom-[-10px] opacity-10">
                 <Trophy className="w-32 h-32 text-white" />
               </div>
-              <div className="relative z-10">
-                <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-orange-100 block">My Runs Scored</span>
-                <div className="font-display font-black text-5xl md:text-6xl flex items-baseline gap-1">
-                  {selectedRole === 'batting' ? p1Runs : p2Runs}
-                  <span className="text-base text-orange-200 font-bold">Runs</span>
+              <div className="relative z-10 flex justify-between items-end">
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-orange-100 block">My Runs Scored</span>
+                  <div className="font-display font-black text-5xl md:text-6xl flex items-baseline gap-1">
+                    {p1Runs}
+                    <span className="text-base text-orange-200 font-bold">Runs</span>
+                  </div>
+                </div>
+                <div className="text-right border-l border-white/20 pl-4">
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-widest text-orange-200 block">Opponent Runs</span>
+                  <div className="font-display font-black text-2xl md:text-3xl text-orange-100 font-mono">
+                    {p2Runs}
+                  </div>
                 </div>
               </div>
               <div className="relative z-10 flex gap-4 text-xs">
