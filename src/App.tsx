@@ -317,7 +317,7 @@ export default function App() {
           setAdminUsername('');
           setAdminPassword('');
         } else {
-          setAdminError('Invalid 4-digit PIN for player!');
+          setAdminError('Invalid PIN / Password for player!');
         }
       } else {
         setAdminError('Player name not registered or invalid credentials!');
@@ -472,7 +472,7 @@ export default function App() {
                     required
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="4-digit PIN or admin password"
+                    placeholder="PIN or Password"
                     className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-semibold font-mono tracking-widest"
                   />
                 </div>

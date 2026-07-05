@@ -49,6 +49,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
   // Player Profile Photo States
   const [playerProfiles, setPlayerProfiles] = useState<Record<string, string>>({});
   const [fullProfiles, setFullProfiles] = useState<Record<string, { name: string; photoURL?: string; pin: string }>>({});
+  const [isProfilesLoaded, setIsProfilesLoaded] = useState(false);
   const [customPlayerPin, setCustomPlayerPin] = useState('');
   const [selectedPlayerForPhoto, setSelectedPlayerForPhoto] = useState('');
   const [customPlayerName, setCustomPlayerName] = useState('');
@@ -132,6 +133,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
       });
       setPlayerProfiles(photoMap);
       setFullProfiles(fullMap);
+      setIsProfilesLoaded(true);
     }, (err) => {
       console.error("Error loading player profiles:", err);
       handleFirestoreError(err, OperationType.LIST, 'playerProfiles');
@@ -155,8 +157,8 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
     try {
       const docId = targetName.toLowerCase();
       let finalPin = customPlayerPin.trim();
-      if (!finalPin || finalPin.length !== 4) {
-        finalPin = fullProfiles[docId]?.pin || Math.floor(1000 + Math.random() * 9000).toString();
+      if (!finalPin) {
+        finalPin = fullProfiles[docId]?.pin || 'password';
       }
 
       await setDoc(doc(db, 'playerProfiles', docId), {
@@ -323,11 +325,39 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
   const handleSaveProfile = async () => {
     setIsSaving(true);
     try {
-      if (!auth.currentUser || auth.currentUser.uid === 'guest_local' || userProfile?.uid === 'guest_local') {
+      const isPlayerLogin = userProfile?.uid && userProfile.uid.startsWith('player_');
+      const isGuestLogin = !auth.currentUser || auth.currentUser.uid === 'guest_local' || userProfile?.uid === 'guest_local';
+
+      if (isPlayerLogin) {
+        // Logged in as Player via Name & PIN
+        const docId = userProfile.uid.replace('player_', '').toLowerCase();
+        
+        // 1. Update Firestore playerProfile
+        await setDoc(doc(db, 'playerProfiles', docId), {
+          name: displayName.trim(),
+          battingStyle,
+          favoriteNumber,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        // 2. Update local state & storage
         const updatedProfile: UserProfile = {
-          uid: 'guest_local',
+          ...userProfile,
           displayName: displayName.trim(),
-          role: userProfile?.role || 'admin',
+          battingStyle,
+          favoriteNumber
+        };
+        localStorage.setItem('hcl_local_guest_profile', JSON.stringify(updatedProfile));
+        if (onUpdateProfile) {
+          onUpdateProfile(updatedProfile);
+        }
+        setIsEditing(false);
+      } else if (isGuestLogin) {
+        // Guest login
+        const updatedProfile: UserProfile = {
+          uid: userProfile?.uid || 'guest_local',
+          displayName: displayName.trim(),
+          role: userProfile?.role || 'user',
           battingStyle,
           favoriteNumber,
           createdAt: userProfile?.createdAt || new Date().toISOString()
@@ -338,6 +368,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
         }
         setIsEditing(false);
       } else {
+        // Authenticated admin / user via real firebase auth
         const userRef = doc(db, 'users', auth.currentUser.uid);
         await updateDoc(userRef, {
           displayName,
@@ -355,22 +386,21 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
 
   // Background sync: Ensure all active standings players have a PIN generated in DB
   useEffect(() => {
-    if (sortedStandings.length === 0) return;
+    if (!isProfilesLoaded || sortedStandings.length === 0) return;
     
     const initializeMissingProfiles = async () => {
       for (const p of sortedStandings) {
         const docId = p.name.toLowerCase();
         const profile = fullProfiles[docId];
-        if (!profile || !profile.pin || profile.pin.length !== 4) {
-          const randomPin = Math.floor(1000 + Math.random() * 9000).toString();
+        if (!profile || !profile.pin) {
           try {
+            // We omit photoURL to guarantee that auto-pin initialization NEVER overwrites or clears existing pictures!
             await setDoc(doc(db, 'playerProfiles', docId), {
               name: p.name,
-              photoURL: profile?.photoURL || '',
-              pin: randomPin,
+              pin: 'password',
               updatedAt: new Date().toISOString()
             }, { merge: true });
-            console.log(`Initialized PIN for ${p.name}: ${randomPin}`);
+            console.log(`Initialized PIN for ${p.name}: password`);
           } catch (err) {
             console.error(`Error initializing PIN for ${p.name}:`, err);
           }
@@ -379,7 +409,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
     };
 
     initializeMissingProfiles();
-  }, [sortedStandings, fullProfiles]);
+  }, [isProfilesLoaded, sortedStandings, fullProfiles]);
 
   return (
     <div id="dashboard-section" className="space-y-8 pb-12">
@@ -1006,9 +1036,21 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
               ) : (
                 <div className="space-y-4">
                   <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-full flex items-center justify-center font-display font-black text-2xl uppercase tracking-tighter shadow-md">
-                      {userProfile?.displayName ? userProfile.displayName.charAt(0) : 'P'}
-                    </div>
+                    {(() => {
+                      const docId = userProfile?.uid?.startsWith('player_') 
+                        ? userProfile.uid.replace('player_', '').toLowerCase() 
+                        : userProfile?.displayName?.toLowerCase() || '';
+                      const photo = playerProfiles[docId];
+                      return photo ? (
+                        <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-orange-500 shadow-md flex-shrink-0">
+                          <img src={photo} alt={userProfile?.displayName} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                      ) : (
+                        <div className="w-14 h-14 bg-gradient-to-br from-orange-500 to-red-600 text-white rounded-full flex items-center justify-center font-display font-black text-2xl uppercase tracking-tighter shadow-md flex-shrink-0">
+                          {userProfile?.displayName ? userProfile.displayName.charAt(0) : 'P'}
+                        </div>
+                      );
+                    })()}
                     <div>
                       <h4 className="font-display font-black text-lg text-slate-200 leading-tight">
                         {userProfile?.displayName || 'Guest Player'}
@@ -1099,22 +1141,21 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                                 <button
                                   type="button"
                                   onClick={async () => {
-                                    if (window.confirm(`Are you sure you want to regenerate PIN for ${profile.name}?`)) {
-                                      const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+                                    if (window.confirm(`Are you sure you want to reset the password for ${profile.name} to 'password'?`)) {
                                       try {
                                         await setDoc(doc(db, 'playerProfiles', docId), {
                                           name: profile.name,
                                           photoURL: profile.photoURL || '',
-                                          pin: newPin,
+                                          pin: 'password',
                                           updatedAt: new Date().toISOString()
                                         }, { merge: true });
                                       } catch (err) {
-                                        console.error("Error regenerating PIN:", err);
+                                        console.error("Error resetting password:", err);
                                       }
                                     }
                                   }}
                                   className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors cursor-pointer"
-                                  title="Regenerate PIN"
+                                  title="Reset Password to 'password'"
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15h-1.562a6 6 0 10-11.83 0H4.21" />
@@ -1174,20 +1215,16 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                     {/* PIN Input Field */}
                     <div className="space-y-1">
                       <label className="font-bold text-slate-400 block">
-                        Player login PIN (4 digits)
+                        Player login PIN / Password
                       </label>
                       <input
                         type="text"
-                        maxLength={4}
                         value={customPlayerPin}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, '');
-                          setCustomPlayerPin(val);
-                        }}
-                        placeholder="Leave blank to auto-generate"
+                        onChange={(e) => setCustomPlayerPin(e.target.value)}
+                        placeholder="Leave blank for 'password'"
                         className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500 font-mono tracking-wider"
                       />
-                      <span className="text-[10px] text-slate-500 block">Used for players to securely log in with their name.</span>
+                      <span className="text-[10px] text-slate-500 block">Used for players to securely log in with their name. Default is 'password'.</span>
                     </div>
 
                     <div className="space-y-2">
