@@ -156,10 +156,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
     setIsSavingPhoto(true);
     try {
       const docId = targetName.toLowerCase();
-      let finalPin = customPlayerPin.trim();
-      if (!finalPin) {
-        finalPin = fullProfiles[docId]?.pin || 'password';
-      }
+      const finalPin = 'password';
 
       await setDoc(doc(db, 'playerProfiles', docId), {
         name: targetName,
@@ -174,7 +171,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
       setSelectedPlayerForPhoto('');
       setCustomPlayerPhotoURL('');
       setCustomPlayerPin('');
-      alert(`Success! Updated profile and PIN for ${targetName}`);
+      alert(`Success! Updated profile for ${targetName}`);
     } catch (err) {
       console.error("Error saving player profile:", err);
       alert("Failed to save player profile. Please try again.");
@@ -1214,17 +1211,13 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
 
                     {/* PIN Input Field */}
                     <div className="space-y-1">
-                      <label className="font-bold text-slate-400 block">
-                        Player login PIN / Password
+                      <label className="font-bold text-slate-400 block text-xs">
+                        Player Login Password
                       </label>
-                      <input
-                        type="text"
-                        value={customPlayerPin}
-                        onChange={(e) => setCustomPlayerPin(e.target.value)}
-                        placeholder="Leave blank for 'password'"
-                        className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500 font-mono tracking-wider"
-                      />
-                      <span className="text-[10px] text-slate-500 block">Used for players to securely log in with their name. Default is 'password'.</span>
+                      <div className="w-full bg-[#161D2F] border border-slate-800 px-3 py-2 rounded-lg text-sm text-slate-400 font-mono tracking-wider">
+                        password
+                      </div>
+                      <span className="text-[10px] text-slate-500 block">The password for all players is fixed to <strong>password</strong>. No custom password creation is required.</span>
                     </div>
 
                     <div className="space-y-2">
