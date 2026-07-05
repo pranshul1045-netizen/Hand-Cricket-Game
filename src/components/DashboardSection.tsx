@@ -391,13 +391,15 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
         const profile = fullProfiles[docId];
         if (!profile || !profile.pin) {
           try {
+            const isSelfAdmin = docId === 'quantum society' || docId === 'pranshul';
+            const defaultPin = isSelfAdmin ? 'admin' : 'password';
             // We omit photoURL to guarantee that auto-pin initialization NEVER overwrites or clears existing pictures!
             await setDoc(doc(db, 'playerProfiles', docId), {
               name: p.name,
-              pin: 'password',
+              pin: defaultPin,
               updatedAt: new Date().toISOString()
             }, { merge: true });
-            console.log(`Initialized PIN for ${p.name}: password`);
+            console.log(`Initialized PIN for ${p.name}: ${defaultPin}`);
           } catch (err) {
             console.error(`Error initializing PIN for ${p.name}:`, err);
           }

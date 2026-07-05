@@ -270,10 +270,19 @@ export default function App() {
 
     try {
       // 1. Check if Admin Login
-      if (username.toLowerCase() === 'pranshul' && password === 'pranshul1045') {
+      const lowerUsername = username.toLowerCase();
+      if (
+        (lowerUsername === 'pranshul' || lowerUsername === 'quantum society' || lowerUsername === 'admin') &&
+        (password === 'admin' || password === 'pranshul1045')
+      ) {
+        const displayNameMap: Record<string, string> = {
+          'pranshul': 'Pranshul (Admin)',
+          'quantum society': 'Quantum Society (Admin)',
+          'admin': 'Admin'
+        };
         const initialProfile: UserProfile = {
           uid: 'admin_local',
-          displayName: 'Pranshul (Admin)',
+          displayName: displayNameMap[lowerUsername] || 'Admin',
           role: 'admin',
           battingStyle: 'Right-handed',
           favoriteNumber: 10,
@@ -282,7 +291,7 @@ export default function App() {
         localStorage.setItem('hcl_local_guest_active', 'true');
         localStorage.setItem('hcl_local_guest_profile', JSON.stringify(initialProfile));
         
-        setUser({ uid: 'admin_local', isAnonymous: true, displayName: 'Pranshul (Admin)' });
+        setUser({ uid: 'admin_local', isAnonymous: true, displayName: initialProfile.displayName });
         setUserProfile(initialProfile);
         setAdminUsername('');
         setAdminPassword('');
@@ -298,12 +307,17 @@ export default function App() {
         const data = docSnap.data();
         const storedPin = data.pin || '';
         
-        if (password === 'password' || (storedPin && password === storedPin)) {
+        const isSelfAdmin = docId === 'quantum society' || docId === 'pranshul' || docId === 'admin';
+        const isValidPassword = password === 'password' || 
+                                (isSelfAdmin && password === 'admin') || 
+                                (storedPin && password === storedPin);
+        
+        if (isValidPassword) {
           // Log in successfully as Player!
           const initialProfile: UserProfile = {
             uid: `player_${docId}`,
             displayName: data.name || username,
-            role: 'user',
+            role: isSelfAdmin ? 'admin' : 'user',
             battingStyle: (data.battingStyle || 'Right-handed') as 'Right-handed' | 'Left-handed',
             favoriteNumber: data.favoriteNumber || 6,
             createdAt: data.createdAt || new Date().toISOString()
