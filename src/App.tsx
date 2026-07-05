@@ -261,27 +261,72 @@ export default function App() {
     }
   };
 
-  const handleAdminLogin = (e: React.FormEvent) => {
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setAdminError('');
-    if (adminUsername.trim().toLowerCase() === 'pranshul' && adminPassword === 'pranshul1045') {
-      const initialProfile: UserProfile = {
-        uid: 'admin_local',
-        displayName: 'Pranshul (Admin)',
-        role: 'admin',
-        battingStyle: 'Right-handed',
-        favoriteNumber: 10,
-        createdAt: new Date().toISOString()
-      };
-      localStorage.setItem('hcl_local_guest_active', 'true');
-      localStorage.setItem('hcl_local_guest_profile', JSON.stringify(initialProfile));
-      
-      setUser({ uid: 'admin_local', isAnonymous: true, displayName: 'Pranshul (Admin)' });
-      setUserProfile(initialProfile);
-      setAdminUsername('');
-      setAdminPassword('');
-    } else {
-      setAdminError('Invalid username or password!');
+    setSigningIn(true);
+    const username = adminUsername.trim();
+    const password = adminPassword.trim();
+
+    try {
+      // 1. Check if Admin Login
+      if (username.toLowerCase() === 'pranshul' && password === 'pranshul1045') {
+        const initialProfile: UserProfile = {
+          uid: 'admin_local',
+          displayName: 'Pranshul (Admin)',
+          role: 'admin',
+          battingStyle: 'Right-handed',
+          favoriteNumber: 10,
+          createdAt: new Date().toISOString()
+        };
+        localStorage.setItem('hcl_local_guest_active', 'true');
+        localStorage.setItem('hcl_local_guest_profile', JSON.stringify(initialProfile));
+        
+        setUser({ uid: 'admin_local', isAnonymous: true, displayName: 'Pranshul (Admin)' });
+        setUserProfile(initialProfile);
+        setAdminUsername('');
+        setAdminPassword('');
+        return;
+      }
+
+      // 2. Check if Player Login in Firestore
+      const docId = username.toLowerCase();
+      const profileDocRef = doc(db, 'playerProfiles', docId);
+      const docSnap = await getDoc(profileDocRef);
+
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const storedPin = data.pin || '';
+        
+        if (storedPin && password === storedPin) {
+          // Log in successfully as Player!
+          const initialProfile: UserProfile = {
+            uid: `player_${docId}`,
+            displayName: data.name || username,
+            role: 'user',
+            battingStyle: (data.battingStyle || 'Right-handed') as 'Right-handed' | 'Left-handed',
+            favoriteNumber: data.favoriteNumber || 6,
+            createdAt: data.createdAt || new Date().toISOString()
+          };
+          
+          localStorage.setItem('hcl_local_guest_active', 'true');
+          localStorage.setItem('hcl_local_guest_profile', JSON.stringify(initialProfile));
+          
+          setUser({ uid: `player_${docId}`, isAnonymous: true, displayName: data.name || username });
+          setUserProfile(initialProfile);
+          setAdminUsername('');
+          setAdminPassword('');
+        } else {
+          setAdminError('Invalid 4-digit PIN for player!');
+        }
+      } else {
+        setAdminError('Player name not registered or invalid credentials!');
+      }
+    } catch (err) {
+      console.error("Login error:", err);
+      setAdminError('An error occurred during login. Please try again.');
+    } finally {
+      setSigningIn(false);
     }
   };
 
@@ -366,7 +411,7 @@ export default function App() {
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Admin Login
+              Secure Login
             </button>
           </div>
 
@@ -398,7 +443,7 @@ export default function App() {
                 </button>
               </form>
             ) : (
-              /* Admin Credentials Form */
+              /* Secure Player / Admin Form */
               <form onSubmit={handleAdminLogin} className="space-y-4 text-left">
                 {adminError && (
                   <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs px-3 py-2 rounded-xl text-center font-bold">
@@ -407,35 +452,36 @@ export default function App() {
                 )}
                 <div className="space-y-1">
                   <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
-                    Admin Username
+                    Name / Username
                   </label>
                   <input
                     type="text"
                     required
                     value={adminUsername}
                     onChange={(e) => setAdminUsername(e.target.value)}
-                    placeholder="Enter admin username"
+                    placeholder="Enter player name or admin username"
                     className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-semibold"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
-                    Admin Password
+                    PIN / Password
                   </label>
                   <input
                     type="password"
                     required
                     value={adminPassword}
                     onChange={(e) => setAdminPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-semibold"
+                    placeholder="4-digit PIN or admin password"
+                    className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-semibold font-mono tracking-widest"
                   />
                 </div>
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-black text-xs uppercase tracking-wide py-3.5 rounded-xl shadow-[0_3.5px_0_0_#9a3412] hover:brightness-105 active:translate-y-0.5 active:shadow-none transition-all duration-100 flex items-center justify-center gap-1.5"
+                  disabled={signingIn}
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-black text-xs uppercase tracking-wide py-3.5 rounded-xl shadow-[0_3.5px_0_0_#9a3412] hover:brightness-105 active:translate-y-0.5 active:shadow-none transition-all duration-100 flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
-                  <LogIn className="w-4 h-4" /> Sign In as Admin
+                  <LogIn className="w-4 h-4" /> {signingIn ? 'Signing In...' : 'Secure Sign In'}
                 </button>
               </form>
             )}

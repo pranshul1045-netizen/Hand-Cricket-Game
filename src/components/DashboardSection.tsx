@@ -48,6 +48,8 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
 
   // Player Profile Photo States
   const [playerProfiles, setPlayerProfiles] = useState<Record<string, string>>({});
+  const [fullProfiles, setFullProfiles] = useState<Record<string, { name: string; photoURL?: string; pin: string }>>({});
+  const [customPlayerPin, setCustomPlayerPin] = useState('');
   const [selectedPlayerForPhoto, setSelectedPlayerForPhoto] = useState('');
   const [customPlayerName, setCustomPlayerName] = useState('');
   const [customPlayerPhotoURL, setCustomPlayerPhotoURL] = useState('');
@@ -114,20 +116,30 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
   useEffect(() => {
     // Real-time subscribe to custom player profiles
     const unsub = onSnapshot(collection(db, 'playerProfiles'), (snapshot) => {
-      const profiles: Record<string, string> = {};
+      const photoMap: Record<string, string> = {};
+      const fullMap: Record<string, { name: string; photoURL?: string; pin: string }> = {};
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
+        const id = docSnap.id;
         if (data.photoURL) {
-          profiles[docSnap.id] = data.photoURL; // doc.id is lowercased name
+          photoMap[id] = data.photoURL;
         }
+        fullMap[id] = {
+          name: data.name || id,
+          photoURL: data.photoURL || '',
+          pin: data.pin || ''
+        };
       });
-      setPlayerProfiles(profiles);
+      setPlayerProfiles(photoMap);
+      setFullProfiles(fullMap);
     }, (err) => {
       console.error("Error loading player profiles:", err);
       handleFirestoreError(err, OperationType.LIST, 'playerProfiles');
     });
     return () => unsub();
   }, []);
+
+  // Sync moved below
 
   const handleSavePlayerPhoto = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -142,29 +154,38 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
     setIsSavingPhoto(true);
     try {
       const docId = targetName.toLowerCase();
+      let finalPin = customPlayerPin.trim();
+      if (!finalPin || finalPin.length !== 4) {
+        finalPin = fullProfiles[docId]?.pin || Math.floor(1000 + Math.random() * 9000).toString();
+      }
+
       await setDoc(doc(db, 'playerProfiles', docId), {
         name: targetName,
         photoURL: customPlayerPhotoURL.trim(),
+        pin: finalPin,
         updatedAt: new Date().toISOString()
-      });
+      }, { merge: true });
       
       if (selectedPlayerForPhoto === 'new_custom') {
         setCustomPlayerName('');
       }
       setSelectedPlayerForPhoto('');
       setCustomPlayerPhotoURL('');
-      alert(`Success! Set profile photo for ${targetName}`);
+      setCustomPlayerPin('');
+      alert(`Success! Updated profile and PIN for ${targetName}`);
     } catch (err) {
-      console.error("Error saving player photo:", err);
-      alert("Failed to save player photo. Please try again.");
+      console.error("Error saving player profile:", err);
+      alert("Failed to save player profile. Please try again.");
     } finally {
       setIsSavingPhoto(false);
     }
   };
 
   const handleStartEditPhoto = (name: string) => {
+    const docId = name.toLowerCase();
     setSelectedPlayerForPhoto(name);
-    setCustomPlayerPhotoURL(playerProfiles[name.toLowerCase()] || '');
+    setCustomPlayerPhotoURL(playerProfiles[docId] || '');
+    setCustomPlayerPin(fullProfiles[docId]?.pin || '');
     const adminEl = document.getElementById('admin-photos-panel');
     if (adminEl) {
       adminEl.scrollIntoView({ behavior: 'smooth' });
@@ -331,6 +352,34 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
       setIsSaving(false);
     }
   };
+
+  // Background sync: Ensure all active standings players have a PIN generated in DB
+  useEffect(() => {
+    if (sortedStandings.length === 0) return;
+    
+    const initializeMissingProfiles = async () => {
+      for (const p of sortedStandings) {
+        const docId = p.name.toLowerCase();
+        const profile = fullProfiles[docId];
+        if (!profile || !profile.pin || profile.pin.length !== 4) {
+          const randomPin = Math.floor(1000 + Math.random() * 9000).toString();
+          try {
+            await setDoc(doc(db, 'playerProfiles', docId), {
+              name: p.name,
+              photoURL: profile?.photoURL || '',
+              pin: randomPin,
+              updatedAt: new Date().toISOString()
+            }, { merge: true });
+            console.log(`Initialized PIN for ${p.name}: ${randomPin}`);
+          } catch (err) {
+            console.error(`Error initializing PIN for ${p.name}:`, err);
+          }
+        }
+      }
+    };
+
+    initializeMissingProfiles();
+  }, [sortedStandings, fullProfiles]);
 
   return (
     <div id="dashboard-section" className="space-y-8 pb-12">
@@ -993,120 +1042,226 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
             </div>
           </div>
 
-          {/* Admin: Manage Player Photos */}
+          {/* Admin: Manage Player Profiles & PINs */}
           {isAdmin && (
-            <div id="admin-photos-panel" className="bg-[#161D2F] border border-slate-700 rounded-2xl p-6 shadow-xl space-y-4">
-              <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
-                <Shield className="w-5 h-5 text-red-400" />
-                <h3 className="font-display font-bold text-base text-slate-100 uppercase tracking-tight">Admin: Player Photos</h3>
+            <div id="admin-photos-panel" className="bg-[#161D2F] border border-slate-700 rounded-2xl p-6 shadow-xl space-y-6">
+              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-red-400" />
+                  <h3 className="font-display font-bold text-base text-slate-100 uppercase tracking-tight">Admin: Player Profiles & PINs Directory</h3>
+                </div>
+                <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2.5 py-1 rounded font-bold font-mono">
+                  ADMIN ACTIVE
+                </span>
               </div>
-              
-              <form onSubmit={handleSavePlayerPhoto} className="space-y-4 text-xs">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 block">Select Player</label>
-                  <select
-                    value={selectedPlayerForPhoto}
-                    onChange={(e) => {
-                      setSelectedPlayerForPhoto(e.target.value);
-                      if (e.target.value && e.target.value !== 'new_custom') {
-                        setCustomPlayerPhotoURL(playerProfiles[e.target.value.toLowerCase()] || '');
-                      } else {
-                        setCustomPlayerPhotoURL('');
-                      }
-                    }}
-                    className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500"
-                  >
-                    <option value="">-- Choose existing player --</option>
-                    {playersArray.map(p => (
-                      <option key={p.name} value={p.name}>{p.name}</option>
-                    ))}
-                    <option value="new_custom">-- Add a new player name --</option>
-                  </select>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Column 1: Player Directory List */}
+                <div className="space-y-3 bg-[#111625] p-4 rounded-xl border border-slate-800 text-xs">
+                  <h4 className="font-display font-bold text-xs text-slate-300 uppercase tracking-wider mb-2">Registered Player Directory</h4>
+                  <div className="max-h-[380px] overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                    {(Object.values(fullProfiles) as Array<{ name: string; photoURL?: string; pin: string }>).length === 0 ? (
+                      <p className="text-slate-500 italic text-xs py-4 text-center">No registered players yet.</p>
+                    ) : (
+                      (Object.values(fullProfiles) as Array<{ name: string; photoURL?: string; pin: string }>)
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((profile) => {
+                          const docId = profile.name.toLowerCase();
+                          return (
+                            <div key={docId} className="flex items-center justify-between p-2.5 bg-[#161D2F] rounded-lg border border-slate-700/60 hover:border-slate-600 transition-colors">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-full overflow-hidden border border-slate-600 flex-shrink-0 bg-slate-800">
+                                  {profile.photoURL ? (
+                                    <img src={profile.photoURL} alt={profile.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-orange-500 to-red-600 text-white font-bold text-xs">
+                                      {profile.name[0]?.toUpperCase()}
+                                    </div>
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-xs text-slate-200">{profile.name}</div>
+                                  <div className="text-[10px] text-slate-400 font-mono">ID: {docId}</div>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <div className="bg-slate-800 text-orange-400 border border-slate-700 px-2 py-1 rounded font-mono font-bold text-xs tracking-wider" title="Login PIN">
+                                  {profile.pin || '••••'}
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEditPhoto(profile.name)}
+                                  className="p-1.5 text-slate-400 hover:text-orange-400 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                                  title="Edit Profile"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    if (window.confirm(`Are you sure you want to regenerate PIN for ${profile.name}?`)) {
+                                      const newPin = Math.floor(1000 + Math.random() * 9000).toString();
+                                      try {
+                                        await setDoc(doc(db, 'playerProfiles', docId), {
+                                          name: profile.name,
+                                          photoURL: profile.photoURL || '',
+                                          pin: newPin,
+                                          updatedAt: new Date().toISOString()
+                                        }, { merge: true });
+                                      } catch (err) {
+                                        console.error("Error regenerating PIN:", err);
+                                      }
+                                    }
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors cursor-pointer"
+                                  title="Regenerate PIN"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15h-1.562a6 6 0 10-11.83 0H4.21" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
                 </div>
 
-                {selectedPlayerForPhoto === 'new_custom' && (
-                  <div className="space-y-1">
-                    <label className="font-bold text-slate-400 block">New Player Name</label>
-                    <input
-                      type="text"
-                      value={customPlayerName}
-                      onChange={(e) => setCustomPlayerName(e.target.value)}
-                      placeholder="E.g. Sachin"
-                      className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500"
-                    />
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <label className="font-bold text-slate-400 block">Choose Avatar Preset</label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {AVATAR_PRESETS.map((avatar) => (
-                      <button
-                        key={avatar.name}
-                        type="button"
-                        onClick={() => setCustomPlayerPhotoURL(avatar.url)}
-                        className={`relative w-10 h-10 rounded-full overflow-hidden border-2 transition-all hover:scale-105 cursor-pointer ${
-                          customPlayerPhotoURL === avatar.url ? 'border-orange-500 ring-2 ring-orange-500/30' : 'border-slate-700'
-                        }`}
-                        title={avatar.name}
+                {/* Column 2: Edit/Add Form */}
+                <div className="bg-[#111625] p-4 rounded-xl border border-slate-800 text-xs">
+                  <h4 className="font-display font-bold text-xs text-slate-300 uppercase tracking-wider mb-3">Add / Edit Player Profile</h4>
+                  
+                  <form onSubmit={handleSavePlayerPhoto} className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-400 block">Select Player</label>
+                      <select
+                        value={selectedPlayerForPhoto}
+                        onChange={(e) => {
+                          setSelectedPlayerForPhoto(e.target.value);
+                          if (e.target.value && e.target.value !== 'new_custom') {
+                            const docId = e.target.value.toLowerCase();
+                            setCustomPlayerPhotoURL(playerProfiles[docId] || '');
+                            setCustomPlayerPin(fullProfiles[docId]?.pin || '');
+                          } else {
+                            setCustomPlayerPhotoURL('');
+                            setCustomPlayerPin('');
+                          }
+                        }}
+                        className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500"
                       >
-                        <img src={avatar.url} alt={avatar.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 block">Or Upload from Device</label>
-                  <div className="flex items-center justify-center w-full">
-                    <label className="flex flex-col items-center justify-center w-full h-20 border border-dashed border-slate-700 rounded-lg cursor-pointer bg-[#1A2238] hover:bg-[#202942] hover:border-slate-600 transition-colors">
-                      <div className="flex flex-col items-center justify-center pt-3 pb-3 text-center">
-                        <Upload className="w-5 h-5 text-slate-400 mb-1" />
-                        <p className="text-[10px] text-slate-400"><span className="font-semibold text-orange-400">Click to upload photo</span></p>
-                        <p className="text-[9px] text-slate-500">Auto-compressed for database storage</p>
-                      </div>
-                      <input 
-                        type="file" 
-                        accept="image/*" 
-                        className="hidden" 
-                        onChange={handleFileUpload} 
-                      />
-                    </label>
-                  </div>
-                  {uploadError && (
-                    <p className="text-red-400 text-[9px] font-semibold mt-1">{uploadError}</p>
-                  )}
-                </div>
-
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 block">Or Custom Image URL</label>
-                  <input
-                    type="url"
-                    value={customPlayerPhotoURL}
-                    onChange={(e) => setCustomPlayerPhotoURL(e.target.value)}
-                    placeholder="https://images.unsplash.com/..."
-                    className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-orange-500 font-mono"
-                  />
-                </div>
-
-                {customPlayerPhotoURL && (
-                  <div className="flex items-center gap-3 bg-[#1A2238] p-2 rounded-xl border border-slate-700">
-                    <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-600 flex-shrink-0">
-                      <img src={customPlayerPhotoURL} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        <option value="">-- Choose existing player --</option>
+                        {playersArray.map(p => (
+                          <option key={p.name} value={p.name}>{p.name}</option>
+                        ))}
+                        <option value="new_custom">-- Add a new player name --</option>
+                      </select>
                     </div>
-                    <span className="text-[10px] text-slate-400 font-mono truncate">Avatar Preview</span>
-                  </div>
-                )}
 
-                <button
-                  type="submit"
-                  disabled={isSavingPhoto || (!selectedPlayerForPhoto) || (selectedPlayerForPhoto === 'new_custom' && !customPlayerName.trim())}
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-1.5 shadow-[0_3px_0_0_#9a3412] active:translate-y-0.5 active:shadow-none transition-all duration-100 disabled:opacity-50 cursor-pointer text-xs uppercase"
-                >
-                  <Save className="w-4 h-4" />
-                  {isSavingPhoto ? 'Saving Photo...' : 'Apply Photo'}
-                </button>
-              </form>
+                    {selectedPlayerForPhoto === 'new_custom' && (
+                      <div className="space-y-1">
+                        <label className="font-bold text-slate-400 block">New Player Name</label>
+                        <input
+                          type="text"
+                          value={customPlayerName}
+                          onChange={(e) => setCustomPlayerName(e.target.value)}
+                          placeholder="E.g. Sachin"
+                          className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500"
+                        />
+                      </div>
+                    )}
+
+                    {/* PIN Input Field */}
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-400 block">
+                        Player login PIN (4 digits)
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={4}
+                        value={customPlayerPin}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          setCustomPlayerPin(val);
+                        }}
+                        placeholder="Leave blank to auto-generate"
+                        className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500 font-mono tracking-wider"
+                      />
+                      <span className="text-[10px] text-slate-500 block">Used for players to securely log in with their name.</span>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="font-bold text-slate-400 block">Choose Avatar Preset</label>
+                      <div className="grid grid-cols-4 gap-2">
+                        {AVATAR_PRESETS.map((avatar) => (
+                          <button
+                            key={avatar.name}
+                            type="button"
+                            onClick={() => setCustomPlayerPhotoURL(avatar.url)}
+                            className={`relative w-10 h-10 rounded-full overflow-hidden border-2 transition-all hover:scale-105 cursor-pointer ${
+                              customPlayerPhotoURL === avatar.url ? 'border-orange-500 ring-2 ring-orange-500/30' : 'border-slate-700'
+                            }`}
+                            title={avatar.name}
+                          >
+                            <img src={avatar.url} alt={avatar.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-400 block">Or Upload from Device</label>
+                      <div className="flex items-center justify-center w-full">
+                        <label className="flex flex-col items-center justify-center w-full h-20 border border-dashed border-slate-700 rounded-lg cursor-pointer bg-[#1A2238] hover:bg-[#202942] hover:border-slate-600 transition-colors">
+                          <div className="flex flex-col items-center justify-center pt-3 pb-3 text-center">
+                            <Upload className="w-5 h-5 text-slate-400 mb-1" />
+                            <p className="text-[10px] text-slate-400"><span className="font-semibold text-orange-400">Click to upload photo</span></p>
+                            <p className="text-[9px] text-slate-500">Auto-compressed for database storage</p>
+                          </div>
+                          <input 
+                            type="file" 
+                            accept="image/*" 
+                            className="hidden" 
+                            onChange={handleFileUpload} 
+                          />
+                        </label>
+                      </div>
+                      {uploadError && (
+                        <p className="text-red-400 text-[9px] font-semibold mt-1">{uploadError}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="font-bold text-slate-400 block">Or Custom Image URL</label>
+                      <input
+                        type="url"
+                        value={customPlayerPhotoURL}
+                        onChange={(e) => setCustomPlayerPhotoURL(e.target.value)}
+                        placeholder="https://images.unsplash.com/..."
+                        className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-xs text-slate-100 focus:outline-none focus:border-orange-500 font-mono"
+                      />
+                    </div>
+
+                    {customPlayerPhotoURL && (
+                      <div className="flex items-center gap-3 bg-[#1A2238] p-2 rounded-xl border border-slate-700">
+                        <div className="w-12 h-12 rounded-full overflow-hidden border border-slate-600 flex-shrink-0">
+                          <img src={customPlayerPhotoURL} alt="Preview" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                        <span className="text-[10px] text-slate-400 font-mono truncate">Avatar Preview</span>
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={isSavingPhoto || (!selectedPlayerForPhoto) || (selectedPlayerForPhoto === 'new_custom' && !customPlayerName.trim())}
+                      className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-bold py-2.5 px-4 rounded-lg flex items-center justify-center gap-1.5 shadow-[0_3px_0_0_#9a3412] active:translate-y-0.5 active:shadow-none transition-all duration-100 disabled:opacity-50 cursor-pointer text-xs uppercase"
+                    >
+                      <Save className="w-4 h-4" />
+                      {isSavingPhoto ? 'Saving Profile...' : 'Apply Profile & PIN'}
+                    </button>
+                  </form>
+                </div>
+              </div>
             </div>
           )}
         </div>

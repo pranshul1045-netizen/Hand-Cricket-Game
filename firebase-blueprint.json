@@ -81,6 +81,18 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["title", "content", "category", "date", "creatorId", "creatorName", "createdAt"]
+    },
+    "PlayerProfile": {
+      "title": "PlayerProfile",
+      "description": "Profile info and 4-digit PIN for HCL players",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "pin": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "pin"]
     }
   },
   "firestore": {
@@ -99,6 +111,10 @@
     "/standings/{standingId}": {
       "schema": "PlayerStanding",
       "description": "Player league standings"
+    },
+    "/playerProfiles/{profileId}": {
+      "schema": "PlayerProfile",
+      "description": "Player profile and PIN details"
     },
     "/leagueUpdates/{updateId}": {
       "schema": "LeagueUpdate",
