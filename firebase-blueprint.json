@@ -93,6 +93,21 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["name", "pin"]
+    },
+    "Registration": {
+      "title": "Registration",
+      "description": "Sign-up details for the official HCL Digital Tournament bracket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "classSec": { "type": "string" },
+        "school": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "registeredBy": { "type": "string" }
+      },
+      "required": ["id", "name", "classSec", "school", "whatsapp", "createdAt", "registeredBy"]
     }
   },
   "firestore": {
@@ -119,6 +134,10 @@
     "/leagueUpdates/{updateId}": {
       "schema": "LeagueUpdate",
       "description": "HCL news and updates published by admins"
+    },
+    "/registrations/{registrationId}": {
+      "schema": "Registration",
+      "description": "Tournament registration submissions"
     }
   }
 }

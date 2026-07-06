@@ -3,6 +3,7 @@ import { RefreshCw, Share2, HelpCircle, Trophy, Sparkles, User, Shield, ArrowRig
 import { db, auth } from '../firebase';
 import { doc, setDoc, collection } from 'firebase/firestore';
 import { DigitalMatch, UserProfile } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
 
 // Hand Cricket gestures mapped to emojis & descriptive terms - high density styled
 const handGestures: Record<number, { label: string; icon: string; style: string }> = {
@@ -70,14 +71,57 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
   const [matchStartTime, setMatchStartTime] = useState<number>(Date.now());
   const [matchDuration, setMatchDuration] = useState('00:00');
 
-  // Trigger setup
-  const startToss = () => {
+  // Countdown state for Play vs Computer
+  const [countdown, setCountdown] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (countdown === null) return;
+    if (countdown > 0) {
+      const timer = setTimeout(() => {
+        setCountdown(countdown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      const timer = setTimeout(() => {
+        setCountdown(null);
+        startActualGameAfterCountdown();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [countdown]);
+  
+  // Turn countdown for choosing a number in match
+  const [turnCountdown, setTurnCountdown] = useState<number | null>(null);
+  const [pendingP1Move, setPendingP1Move] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (turnCountdown === null) return;
+    if (turnCountdown > 0) {
+      const timer = setTimeout(() => {
+        setTurnCountdown(turnCountdown - 1);
+      }, 700);
+      return () => clearTimeout(timer);
+    } else {
+      setTurnCountdown(null);
+      if (pendingP1Move !== null) {
+        executeActualTurn(pendingP1Move);
+        setPendingP1Move(null);
+      }
+    }
+  }, [turnCountdown, pendingP1Move]);
+
+  const startActualGameAfterCountdown = () => {
     setMatchStartTime(Date.now());
     setPhase('toss');
     setTossStep('choice');
     setTossP1Val(null);
     setTossP2Val(null);
     setTossWinner(null);
+  };
+
+  // Trigger setup with 3-second countdown
+  const startToss = () => {
+    setCountdown(3);
   };
 
   const handleTossChoice = (choice: 'odd' | 'even') => {
@@ -172,8 +216,17 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
   };
 
   const playTurn = (p1Move: number) => {
-    if (isRevealing) return;
+    if (isRevealing || turnCountdown !== null) return;
     setIsRevealing(true);
+    setLastP1Move(null);
+    setLastP2Move(null);
+    setPendingP1Move(p1Move);
+    setTurnCountdown(3);
+    setCommentary("Get ready... 1, 2, 3... SHOOT!");
+    setCommentaryColor("text-yellow-400 font-bold animate-pulse");
+  };
+
+  const executeActualTurn = (p1Move: number) => {
     setBallsFaced(prev => prev + 1);
 
     // Track highest gesture played
@@ -346,6 +399,37 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
   return (
     <div id="digital-game-arena" className="max-w-5xl mx-auto space-y-6 pb-12">
       
+      {/* 3, 2, 1 Countdown Overlay */}
+      <AnimatePresence>
+        {countdown !== null && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0F1423]/95 backdrop-blur-md"
+          >
+            <motion.div
+              key={countdown}
+              initial={{ scale: 0.3, opacity: 0 }}
+              animate={{ scale: 1.1, opacity: 1 }}
+              exit={{ scale: 1.4, opacity: 0 }}
+              transition={{ duration: 0.8, ease: "easeOut" }}
+              className="flex flex-col items-center gap-6 text-center"
+            >
+              <span className="text-[12px] font-mono font-bold tracking-widest text-orange-400 uppercase">
+                Match Commencing In...
+              </span>
+              <h1 className="font-display font-black text-8xl md:text-9xl text-white">
+                {countdown === 0 ? "PLAY!" : countdown}
+              </h1>
+              <div className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full text-xs font-mono font-bold text-orange-400 uppercase">
+                <Zap className="w-4 h-4 animate-bounce" /> Get Ready to Bat & Bowl!
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* 1. SETUP PHASE */}
       {phase === 'setup' && (
         <div className="bg-[#161D2F] border border-slate-700 rounded-2xl p-6 md:p-8 text-center space-y-6 max-w-lg mx-auto shadow-xl">
@@ -635,9 +719,22 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
 
               {/* Central VS Badge */}
               <div className="md:col-span-1 flex flex-col items-center justify-center py-4 md:py-0">
-                <div className="w-12 h-12 rounded-full bg-slate-900 border-2 border-slate-700 flex items-center justify-center font-display font-black text-xs text-orange-400 select-none shadow-xl">
-                  VS
-                </div>
+                {turnCountdown !== null ? (
+                  <motion.div 
+                    key={turnCountdown}
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1.2, opacity: 1 }}
+                    exit={{ scale: 1.5, opacity: 0 }}
+                    transition={{ duration: 0.4 }}
+                    className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-500 to-red-600 border-2 border-orange-400 flex items-center justify-center font-display font-black text-xl text-white select-none shadow-[0_0_20px_rgba(249,115,22,0.5)]"
+                  >
+                    {turnCountdown}
+                  </motion.div>
+                ) : (
+                  <div className="w-12 h-12 rounded-full bg-slate-900 border-2 border-slate-700 flex items-center justify-center font-display font-black text-xs text-orange-400 select-none shadow-xl">
+                    VS
+                  </div>
+                )}
               </div>
 
               {/* Batter Card - Right Side (Orange/Gold Theme) */}

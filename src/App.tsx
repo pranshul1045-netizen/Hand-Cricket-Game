@@ -19,6 +19,7 @@ import DigitalGameSection from './components/DigitalGameSection';
 import LeagueMatchesSection from './components/LeagueMatchesSection';
 import RulesSection from './components/RulesSection';
 import UpdatesSection from './components/UpdatesSection';
+import RegistrationSection from './components/RegistrationSection';
 
 const DEFAULT_DEMO_MATCHES: SchoolMatch[] = [
   {
@@ -71,6 +72,31 @@ const DEFAULT_DEMO_MATCHES: SchoolMatch[] = [
   }
 ];
 
+function LockedTab({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="max-w-xl mx-auto bg-[#161D2F] border border-slate-700 rounded-3xl p-8 text-center space-y-6 shadow-2xl relative overflow-hidden py-16">
+      <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-2xl"></div>
+      <div className="w-16 h-16 bg-orange-500/10 border-2 border-orange-500/20 rounded-full flex items-center justify-center mx-auto text-orange-400">
+        <svg xmlns="http://www.w3.org/2000/svg" className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+          <path d="M7 11V7a5 5 0 0110 0v4" />
+        </svg>
+      </div>
+      <div className="space-y-2">
+        <h3 className="font-display font-black text-2xl text-slate-100 uppercase tracking-tight">{title}</h3>
+        <p className="text-slate-400 text-sm font-medium">
+          {description}
+        </p>
+      </div>
+      <div className="bg-[#1A2238] border border-slate-800 px-4 py-2 rounded-xl inline-block">
+        <span className="text-[10px] font-mono font-bold text-orange-400 uppercase tracking-widest">
+          🔐 Locked by Administrator
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState<any>(() => {
     const isGuestActive = localStorage.getItem('hcl_local_guest_active') === 'true';
@@ -105,7 +131,8 @@ export default function App() {
 
   const [schoolMatches, setSchoolMatches] = useState<SchoolMatch[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'league' | 'rules' | 'updates'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'league' | 'rules' | 'updates' | 'digital_home' | 'digital_league'>('dashboard');
+  const [tournamentType, setTournamentType] = useState<'schoolyard' | 'digital' | 'registration'>('schoolyard');
 
   // Login states
   const [loginMode, setLoginMode] = useState<'guest' | 'admin'>('guest');
@@ -550,111 +577,244 @@ export default function App() {
         </div>
       </header>
 
+      {/* Category/Tournament Switcher */}
+      <div className="max-w-7xl mx-auto px-4 md:px-8 pt-6 pb-2">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-[#161D2F] border border-slate-700/80 p-2 rounded-2xl shadow-md">
+          <div className="flex flex-wrap gap-1 w-full sm:w-auto">
+            <button
+              onClick={() => {
+                setTournamentType('schoolyard');
+                setActiveTab('dashboard');
+              }}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
+                tournamentType === 'schoolyard'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg font-black'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A2238]'
+              }`}
+            >
+              🏫 Schoolyard Tournament
+            </button>
+            <button
+              onClick={() => {
+                setTournamentType('digital');
+                setActiveTab('game');
+              }}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
+                tournamentType === 'digital'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg font-black'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A2238]'
+              }`}
+            >
+              🎮 Digital Tournament
+            </button>
+            <button
+              onClick={() => {
+                setTournamentType('registration');
+              }}
+              className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
+                tournamentType === 'registration'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-600 text-white shadow-lg font-black'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-[#1A2238]'
+              }`}
+            >
+              📝 Register Name
+            </button>
+          </div>
+          
+          <div className="text-[10px] font-mono font-bold text-slate-400 flex items-center gap-1.5 self-end sm:self-auto bg-[#1A2238]/60 px-3 py-1.5 rounded-lg border border-slate-700/40">
+            {tournamentType === 'schoolyard' && <span>🏆 Active schoolyard points table & matches</span>}
+            {tournamentType === 'digital' && <span>⚡ Play hand-cricket vs Computer</span>}
+            {tournamentType === 'registration' && <span>✍️ Sign up for the Digital Tournament</span>}
+          </div>
+        </div>
+      </div>
+
       {/* Main Container Viewport */}
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-6">
-        {activeTab === 'dashboard' && (
-          <DashboardSection 
-            userProfile={userProfile} 
-            schoolMatches={schoolMatches} 
-            onStartGame={() => setActiveTab('game')}
-            onUpdateProfile={handleUpdateLocalProfile}
-          />
-        )}
-        {activeTab === 'game' && (
-          <DigitalGameSection 
-            userProfile={userProfile} 
-            onGameSaved={() => {
-              // trigger points re-sync or similar if desired
-            }} 
-          />
-        )}
-        {activeTab === 'league' && (
-          <LeagueMatchesSection 
-            userProfile={userProfile} 
-            schoolMatches={schoolMatches}
-            isAdmin={isAdmin}
-            onAddMatch={handleAddLocalMatch}
-            onDeleteMatch={handleDeleteLocalMatch}
-          />
-        )}
-        {activeTab === 'updates' && (
-          <UpdatesSection 
-            userProfile={userProfile}
-            isAdmin={isAdmin}
-          />
-        )}
-        {activeTab === 'rules' && (
-          <RulesSection />
+        {tournamentType === 'registration' ? (
+          <RegistrationSection userProfile={userProfile} isAdmin={isAdmin} />
+        ) : tournamentType === 'schoolyard' ? (
+          <>
+            {activeTab === 'dashboard' && (
+              <DashboardSection 
+                userProfile={userProfile} 
+                schoolMatches={schoolMatches} 
+                onStartGame={() => {
+                  setTournamentType('digital');
+                  setActiveTab('game');
+                }}
+                onUpdateProfile={handleUpdateLocalProfile}
+              />
+            )}
+            {activeTab === 'league' && (
+              <LeagueMatchesSection 
+                userProfile={userProfile} 
+                schoolMatches={schoolMatches}
+                isAdmin={isAdmin}
+                onAddMatch={handleAddLocalMatch}
+                onDeleteMatch={handleDeleteLocalMatch}
+              />
+            )}
+            {activeTab === 'updates' && (
+              <UpdatesSection 
+                userProfile={userProfile}
+                isAdmin={isAdmin}
+              />
+            )}
+            {activeTab === 'rules' && (
+              <RulesSection />
+            )}
+          </>
+        ) : (
+          /* DIGITAL TOURNAMENT MODES */
+          <>
+            {activeTab === 'digital_home' && (
+              <LockedTab 
+                title="Digital Home Screen" 
+                description="The digital tournament home feed, dynamic brackets, and live stream overlays are currently locked by the administrator until group stages conclude."
+              />
+            )}
+            {activeTab === 'game' && (
+              <DigitalGameSection 
+                userProfile={userProfile} 
+                onGameSaved={() => {
+                  // trigger points re-sync if desired
+                }} 
+              />
+            )}
+            {activeTab === 'digital_league' && (
+              <LockedTab 
+                title="Digital Scorecards" 
+                description="Live digital tournament brackets, participant rankings, and play-off scorecards are locked. They will unlock automatically once registration closes and seedings are generated."
+              />
+            )}
+            {activeTab === 'rules' && (
+              <RulesSection />
+            )}
+          </>
         )}
       </main>
 
       {/* Responsive Floating Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#1A2238]/95 backdrop-blur-md border-t border-slate-700 shadow-lg px-4 py-2.5 flex justify-around md:justify-center md:gap-8 items-center max-w-lg md:max-w-none mx-auto md:rounded-full md:bottom-4 md:border">
-        {/* Dashboard Tab */}
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
-            activeTab === 'dashboard'
-              ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
-          }`}
-        >
-          <Trophy className="w-4 h-4" />
-          <span className="font-display">Home</span>
-        </button>
+      {tournamentType !== 'registration' && (
+        <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#1A2238]/95 backdrop-blur-md border-t border-slate-700 shadow-lg px-4 py-2.5 flex justify-around md:justify-center md:gap-8 items-center max-w-lg md:max-w-none mx-auto md:rounded-full md:bottom-4 md:border">
+          {tournamentType === 'schoolyard' ? (
+            <>
+              {/* Dashboard Tab */}
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'dashboard'
+                    ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
+                }`}
+              >
+                <Trophy className="w-4 h-4" />
+                <span className="font-display">Home</span>
+              </button>
 
-        {/* Digital Game Tab */}
-        <button
-          onClick={() => setActiveTab('game')}
-          className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
-            activeTab === 'game'
-              ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
-          }`}
-        >
-          <Gamepad2 className="w-4 h-4" />
-          <span className="font-display">Play Game</span>
-        </button>
+              {/* Updates Tab */}
+              <button
+                onClick={() => setActiveTab('updates')}
+                className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'updates'
+                    ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
+                }`}
+              >
+                <Megaphone className="w-4 h-4" />
+                <span className="font-display">Updates</span>
+              </button>
 
-        {/* Updates Tab */}
-        <button
-          onClick={() => setActiveTab('updates')}
-          className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
-            activeTab === 'updates'
-              ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
-          }`}
-        >
-          <Megaphone className="w-4 h-4" />
-          <span className="font-display">Updates</span>
-        </button>
+              {/* School yard Leagues Tab */}
+              <button
+                onClick={() => setActiveTab('league')}
+                className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'league'
+                    ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
+                }`}
+              >
+                <Calendar className="w-4 h-4" />
+                <span className="font-display">Scorecards</span>
+              </button>
 
-        {/* School yard Leagues Tab */}
-        <button
-          onClick={() => setActiveTab('league')}
-          className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
-            activeTab === 'league'
-              ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
-          }`}
-        >
-          <Calendar className="w-4 h-4" />
-          <span className="font-display">Scorecards</span>
-        </button>
+              {/* Rules & Guide Tab */}
+              <button
+                onClick={() => setActiveTab('rules')}
+                className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'rules'
+                    ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                <span className="font-display">HCL Rules</span>
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Digital Home Tab (Locked) */}
+              <button
+                onClick={() => setActiveTab('digital_home')}
+                className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'digital_home'
+                    ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  <Trophy className="w-4 h-4 text-slate-500" />
+                  <span className="text-[10px]">🔒</span>
+                </div>
+                <span className="font-display">Home</span>
+              </button>
 
-        {/* Rules & Guide Tab */}
-        <button
-          onClick={() => setActiveTab('rules')}
-          className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all ${
-            activeTab === 'rules'
-              ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
-              : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
-          }`}
-        >
-          <BookOpen className="w-4 h-4" />
-          <span className="font-display">HCL Rules</span>
-        </button>
-      </nav>
+              {/* Play Game Tab */}
+              <button
+                onClick={() => setActiveTab('game')}
+                className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'game'
+                    ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
+                }`}
+              >
+                <Gamepad2 className="w-4 h-4" />
+                <span className="font-display">Play Game</span>
+              </button>
+
+              {/* Digital Scorecards Tab (Locked) */}
+              <button
+                onClick={() => setActiveTab('digital_league')}
+                className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'digital_league'
+                    ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
+                }`}
+              >
+                <div className="flex items-center gap-1">
+                  <Calendar className="w-4 h-4 text-slate-500" />
+                  <span className="text-[10px]">🔒</span>
+                </div>
+                <span className="font-display">Scorecards</span>
+              </button>
+
+              {/* Rules & Guide Tab */}
+              <button
+                onClick={() => setActiveTab('rules')}
+                className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
+                  activeTab === 'rules'
+                    ? 'bg-orange-500/15 text-orange-400 font-bold text-xs md:text-sm border border-orange-500/20 shadow-sm'
+                    : 'text-slate-400 hover:text-slate-200 text-xs md:text-sm'
+                }`}
+              >
+                <BookOpen className="w-4 h-4" />
+                <span className="font-display">HCL Rules</span>
+              </button>
+            </>
+          )}
+        </nav>
+      )}
 
     </div>
   );

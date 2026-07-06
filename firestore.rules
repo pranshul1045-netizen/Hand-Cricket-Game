@@ -82,6 +82,16 @@ service cloud.firestore {
         && data.creatorName is string && data.creatorName.size() <= 100;
     }
 
+    function isValidRegistration(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+        && data.classSec is string && data.classSec.size() > 0 && data.classSec.size() <= 100
+        && data.school is string && data.school.size() > 0 && data.school.size() <= 200
+        && data.whatsapp is string && data.whatsapp.size() > 0 && data.whatsapp.size() <= 50
+        && data.createdAt is string && data.createdAt.size() <= 50
+        && data.registeredBy is string && data.registeredBy.size() <= 100;
+    }
+
     // Rules matching collections
     match /users/{userId} {
       allow read: if true;
@@ -128,6 +138,10 @@ service cloud.firestore {
         && request.resource.data.creatorId == resource.data.creatorId
         && request.resource.data.createdAt == resource.data.createdAt;
       allow delete: if true;
+    }
+
+    match /registrations/{registrationId} {
+      allow read, write: if true;
     }
   }
 }
