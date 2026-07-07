@@ -93,6 +93,7 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
       });
 
       setSubmitted(true);
+      window.open('https://chat.whatsapp.com/Haalu8HCiSB5QEAMxdJq5I', '_blank');
       setName('');
       setClassSec('');
       setSchool('');
@@ -148,16 +149,24 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
       {/* Title Header */}
-      <div className="text-center space-y-2">
-        <div className="inline-flex items-center gap-1.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 px-3.5 py-1 rounded-full text-xs font-bold font-mono tracking-wider uppercase">
-          <Sparkles className="w-3.5 h-3.5 fill-current" /> Tournament Registration
+      <div className="text-center space-y-3">
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-1.5 bg-orange-500/10 text-orange-400 border border-orange-500/20 px-3.5 py-1 rounded-full text-xs font-bold font-mono tracking-wider uppercase">
+            <Sparkles className="w-3.5 h-3.5 fill-current" /> Tournament Registration
+          </div>
+          <h2 className="font-display font-black text-3xl md:text-4xl text-slate-100 tracking-tight leading-none uppercase">
+            Digital Arena Sign-Up
+          </h2>
+          <p className="text-slate-400 text-sm max-w-md mx-auto">
+            Register your details below to secure your spot in the official HCL Digital Tournament bracket!
+          </p>
         </div>
-        <h2 className="font-display font-black text-3xl md:text-4xl text-slate-100 tracking-tight leading-none uppercase">
-          Digital Arena Sign-Up
-        </h2>
-        <p className="text-slate-400 text-sm max-w-md mx-auto">
-          Register your details below to secure your spot in the official HCL Digital Tournament bracket!
-        </p>
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] sm:text-xs font-mono font-semibold py-2 px-4 rounded-full flex flex-col sm:flex-row items-center gap-2 mt-2">
+          <div className="flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 shrink-0" />
+            <span>Upon registration, you will automatically be redirected to join the <strong>"HCL Digital tournament"</strong> WhatsApp group</span>
+          </div>
+        </div>
       </div>
 
       {/* Admin Panel Toggle */}
