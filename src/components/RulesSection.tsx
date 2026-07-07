@@ -139,6 +139,51 @@ export default function RulesSection() {
         </div>
 
 
+        {/* HCL Tournament Format */}
+        <div className="bg-[#161D2F] border border-slate-700 p-6 rounded-xl shadow-lg space-y-4 md:col-span-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-orange-500/10 text-orange-400 rounded-lg flex items-center justify-center border border-orange-500/20">
+              <Award className="w-5 h-5" />
+            </div>
+            <h3 className="font-display font-bold text-lg text-slate-100 uppercase tracking-tight">HCL Tournament Format</h3>
+          </div>
+          <p className="text-sm text-slate-300 leading-relaxed">
+            The tournament features a massive <strong>48-player</strong> field with a hybrid Group Stage and Knockout structure.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-slate-300">
+            <div className="space-y-2">
+              <h4 className="font-bold text-orange-400 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-orange-400" /> Phase 1: Group Stage
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Players are divided into <strong>12 groups of 4</strong>. Each player plays everyone in their group once (Round Robin). Points, Net Run Rate (NRR), and direct encounters determine the standings.
+              </p>
+              <div className="bg-[#1A2238] p-3 rounded-lg border border-slate-700 space-y-2">
+                <p className="text-xs font-semibold text-slate-200">Advancement to Knockouts:</p>
+                <ul className="text-xs text-slate-400 space-y-1 list-disc pl-4">
+                  <li><strong>Top 2</strong> players from each of the 12 groups.</li>
+                  <li><strong>8 best 3rd-place</strong> players across all groups.</li>
+                </ul>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <h4 className="font-bold text-purple-400 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-purple-400" /> Phase 2: Knockout Stage
+              </h4>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                The final 32 players enter a high-stakes, single-elimination bracket until the Ultimate Hand Cricket Champion is crowned!
+              </p>
+              <ul className="text-xs font-mono text-slate-400 space-y-1 bg-[#1A2238] p-3 rounded-lg border border-slate-700">
+                <li>• Round of 32 (32 players)</li>
+                <li>• Round of 16 (16 players)</li>
+                <li>• Quarterfinals (8 players)</li>
+                <li>• Semifinals (4 players)</li>
+                <li>• Final & 3rd-Place Match</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   );

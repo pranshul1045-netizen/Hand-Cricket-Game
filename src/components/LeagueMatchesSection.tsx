@@ -64,7 +64,7 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
   const [player2Conceded, setPlayer2Conceded] = useState<number>(0);
   const [winner, setWinner] = useState<'player1' | 'player2' | 'tie'>('player1');
   const [status, setStatus] = useState<'completed' | 'scheduled'>('completed');
-  const [stage, setStage] = useState<'Group Stage' | 'Semifinal 1' | 'Semifinal 2' | 'Final'>('Group Stage');
+  const [stage, setStage] = useState<string>('Group Stage');
   const [matchDate, setMatchDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -307,13 +307,16 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
               <label className="font-bold text-slate-400 block">Match Stage</label>
               <select
                 value={stage}
-                onChange={(e: any) => setStage(e.target.value as any)}
+                onChange={(e: any) => setStage(e.target.value)}
                 className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-200 focus:outline-none focus:border-orange-500 cursor-pointer"
               >
                 <option value="Group Stage">Group Stage</option>
-                <option value="Semifinal 1">Semifinal 1</option>
-                <option value="Semifinal 2">Semifinal 2</option>
+                <option value="Round of 32">Round of 32</option>
+                <option value="Round of 16">Round of 16</option>
+                <option value="Quarterfinal">Quarterfinal</option>
+                <option value="Semifinal">Semifinal</option>
                 <option value="Final">Final</option>
+                <option value="3rd-Place Match">3rd-Place Match</option>
               </select>
             </div>
 
