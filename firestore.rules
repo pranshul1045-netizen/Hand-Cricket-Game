@@ -97,7 +97,8 @@ service cloud.firestore {
     }
 
     function isSchoolyardLocked() {
-      return get(/databases/$(database)/documents/settings/tournament).data.schoolyardLocked == true;
+      return exists(/databases/$(database)/documents/settings/tournament) && 
+             get(/databases/$(database)/documents/settings/tournament).data.schoolyardLocked == true;
     }
 
     // Rules matching collections
@@ -136,7 +137,7 @@ service cloud.firestore {
 
     match /playerProfiles/{profileId} {
       allow read: if true;
-      allow write: if !isSchoolyardLocked();
+      allow write: if true;
     }
 
     match /leagueUpdates/{updateId} {
@@ -150,7 +151,7 @@ service cloud.firestore {
 
     match /registrations/{registrationId} {
       allow read: if true;
-      allow write: if !isSchoolyardLocked();
+      allow write: if true;
     }
 
     match /settings/{settingsId} {

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RefreshCw, Share2, HelpCircle, Trophy, Sparkles, User, Shield, ArrowRight, Zap, Play, RotateCcw } from 'lucide-react';
 import { db, auth } from '../firebase';
-import { doc, setDoc, collection } from 'firebase/firestore';
+import { doc, setDoc, collection, onSnapshot } from 'firebase/firestore';
 import { DigitalMatch, UserProfile } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -33,13 +33,60 @@ const comments = {
   ]
 };
 
-export default function DigitalGameSection({ userProfile, onGameSaved }: DigitalGameProps) {
+export default function DigitalGameSection({ userProfile, playerTeamName, onGameSaved }: DigitalGameProps) {
+  const hasRegisteredTeam = !!(playerTeamName && playerTeamName.trim() !== '');
+
   // Game Setup States
   const [aiDifficulty, setAiDifficulty] = useState<'easy' | 'hard'>('easy');
   const [gameMode, setGameMode] = useState<'pve' | 'local'>('pve'); // Player vs Environment or Local PvP
   const [localPvpRole, setLocalPvpRole] = useState<'player1' | 'player2'>('player1'); // For local pass & play
   const [player1Name, setPlayer1Name] = useState('Player 1');
   const [player2Name, setPlayer2Name] = useState('Player 2');
+
+  const [opponentType, setOpponentType] = useState<'cpu' | 'registered'>('cpu');
+  const [registeredPlayers, setRegisteredPlayers] = useState<any[]>([]);
+  const [selectedOpponent, setSelectedOpponent] = useState<any | null>(null);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'playerProfiles'), (snapshot) => {
+      const players: any[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const docId = docSnap.id;
+        const currentUserId = (userProfile?.uid || '').replace('player_', '').toLowerCase();
+        // Include other players who have a non-empty teamName and are not ourselves
+        if (data.teamName && data.name && docId !== currentUserId) {
+          players.push({
+            id: docId,
+            name: data.name,
+            teamName: data.teamName,
+            photoURL: data.photoURL || ''
+          });
+        }
+      });
+      setRegisteredPlayers(players);
+    }, (err) => {
+      console.error("Error loading registered players:", err);
+    });
+    return () => unsub();
+  }, [userProfile]);
+
+  // Update player2Name based on opponentType, selectedOpponent, and difficulty
+  useEffect(() => {
+    if (opponentType === 'registered' && selectedOpponent) {
+      setPlayer2Name(`${selectedOpponent.name} (${selectedOpponent.teamName})`);
+    } else {
+      setPlayer2Name(`CPU (${aiDifficulty.toUpperCase()})`);
+    }
+  }, [opponentType, selectedOpponent, aiDifficulty]);
+
+  useEffect(() => {
+    if (userProfile) {
+      const baseName = userProfile.displayName || 'Player';
+      const teamSuffix = playerTeamName ? ` (${playerTeamName})` : '';
+      setPlayer1Name(baseName + teamSuffix);
+    }
+  }, [userProfile, playerTeamName]);
 
   // Core Game Loop State
   const [phase, setPhase] = useState<'setup' | 'toss' | 'role_selection' | 'playing' | 'innings_break' | 'result'>('setup');
@@ -174,7 +221,7 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
     const chosen = roles[Math.floor(Math.random() * 2)];
     // If CPU chooses batting, Player is bowling (first innings role)
     const playerRole = chosen === 'batting' ? 'bowling' : 'batting';
-    setCommentary(`CPU won the toss & chose to ${chosen.toUpperCase()} first!`);
+    setCommentary(`${player2Name} won the toss & chose to ${chosen.toUpperCase()} first!`);
     setTimeout(() => {
       selectRole(playerRole);
     }, 1500);
@@ -184,16 +231,18 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
   const getMatchRoles = (): { batsman: string; bowler: string; isP1Batting: boolean } => {
     if (gameMode === 'pve') {
       const isPlayerBattingFirst = selectedRole === 'batting';
+      const p1Disp = player1Name || 'Player';
+      const p2Disp = player2Name || 'CPU';
       if (currentInnings === 1) {
         return {
-          batsman: isPlayerBattingFirst ? 'Player' : 'CPU',
-          bowler: isPlayerBattingFirst ? 'CPU' : 'Player',
+          batsman: isPlayerBattingFirst ? p1Disp : p2Disp,
+          bowler: isPlayerBattingFirst ? p2Disp : p1Disp,
           isP1Batting: isPlayerBattingFirst
         };
       } else {
         return {
-          batsman: isPlayerBattingFirst ? 'CPU' : 'Player',
-          bowler: isPlayerBattingFirst ? 'Player' : 'CPU',
+          batsman: isPlayerBattingFirst ? p2Disp : p1Disp,
+          bowler: isPlayerBattingFirst ? p1Disp : p2Disp,
           isP1Batting: !isPlayerBattingFirst
         };
       }
@@ -360,7 +409,16 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
       id: matchId,
       playerUid: auth.currentUser!.uid,
       playerName: userProfile?.displayName || 'Player',
-      opponentName: gameMode === 'pve' ? `CPU (${aiDifficulty.toUpperCase()})` : 'Local PvP',
+      playerTeamName: playerTeamName || undefined,
+      opponentName: opponentType === 'registered' && selectedOpponent 
+        ? selectedOpponent.name 
+        : `CPU (${aiDifficulty.toUpperCase()})`,
+      opponentTeamName: opponentType === 'registered' && selectedOpponent
+        ? selectedOpponent.teamName
+        : undefined,
+      opponentUid: opponentType === 'registered' && selectedOpponent
+        ? selectedOpponent.id
+        : undefined,
       playerRuns,
       opponentRuns: cpuRuns,
       winner: didPlayerWin ? 'player' : 'opponent',
@@ -443,43 +501,128 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
           <div className="space-y-2">
             <h3 className="font-display font-black text-2xl text-orange-400 tracking-tight uppercase">HCL Digital Arena</h3>
             <p className="text-slate-400 text-sm font-medium">
-              Step onto the virtual pitch! Select your difficulty and start your Hand Cricket League campaign.
+              Step onto the virtual pitch! Choose to play against the computer or select another registered player who has declared their team name.
             </p>
           </div>
 
           <div className="space-y-4 pt-4 text-left">
             <div className="space-y-2">
-              <label className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">AI Difficulty</label>
+              <label className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                Opponent Type
+              </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
-                  onClick={() => setAiDifficulty('easy')}
-                  className={`py-3 rounded-xl text-sm font-semibold border text-center transition-all cursor-pointer ${
-                    aiDifficulty === 'easy'
+                  onClick={() => {
+                    setOpponentType('cpu');
+                    setSelectedOpponent(null);
+                  }}
+                  className={`py-3 rounded-xl text-xs md:text-sm font-semibold border text-center transition-all cursor-pointer ${
+                    opponentType === 'cpu'
                       ? 'bg-purple-500/20 border-purple-500/40 text-purple-400 font-black shadow-lg'
                       : 'bg-[#1A2238] border-slate-700 text-slate-400'
                   }`}
                 >
-                  Easy CPU
+                  🤖 Play vs CPU
                 </button>
                 <button
                   type="button"
-                  onClick={() => setAiDifficulty('hard')}
-                  className={`py-3 rounded-xl text-sm font-semibold border text-center transition-all cursor-pointer ${
-                    aiDifficulty === 'hard'
-                      ? 'bg-orange-500/20 border-orange-500/40 text-orange-400 font-black shadow-lg'
-                      : 'bg-[#1A2238] border-slate-700 text-slate-400'
+                  disabled={!hasRegisteredTeam}
+                  onClick={() => {
+                    if (!hasRegisteredTeam) return;
+                    setOpponentType('registered');
+                    if (registeredPlayers.length > 0 && !selectedOpponent) {
+                      setSelectedOpponent(registeredPlayers[0]);
+                    }
+                  }}
+                  className={`py-3 rounded-xl text-xs md:text-sm font-semibold border text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    !hasRegisteredTeam
+                      ? 'bg-slate-800/20 border-slate-800 text-slate-600 cursor-not-allowed'
+                      : opponentType === 'registered'
+                        ? 'bg-orange-500/20 border-orange-500/40 text-orange-400 font-black shadow-lg'
+                        : 'bg-[#1A2238] border-slate-700 text-slate-400 hover:border-orange-500/30'
                   }`}
+                  title={!hasRegisteredTeam ? "Register your team name under the Dashboard to unlock!" : "Play against other registered players"}
                 >
-                  Hard Core CPU
+                  {hasRegisteredTeam ? '🛡️ Registered Player' : '🔒 Registered Player'}
                 </button>
               </div>
+
+              {!hasRegisteredTeam && (
+                <div className="mt-2 p-3 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-300 font-medium leading-relaxed">
+                  ⚠️ <strong>Feature Locked</strong>: The option to play against other registered players is only available once you declare your team name. Please register your team name first!
+                </div>
+              )}
             </div>
+
+            {opponentType === 'cpu' ? (
+              <div className="space-y-2">
+                <label className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">AI Difficulty</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setAiDifficulty('easy')}
+                    className={`py-3 rounded-xl text-sm font-semibold border text-center transition-all cursor-pointer ${
+                      aiDifficulty === 'easy'
+                        ? 'bg-purple-500/20 border-purple-500/40 text-purple-400 font-black shadow-lg'
+                        : 'bg-[#1A2238] border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    Easy CPU
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAiDifficulty('hard')}
+                    className={`py-3 rounded-xl text-sm font-semibold border text-center transition-all cursor-pointer ${
+                      aiDifficulty === 'hard'
+                        ? 'bg-orange-500/20 border-orange-500/40 text-orange-400 font-black shadow-lg'
+                        : 'bg-[#1A2238] border-slate-700 text-slate-400'
+                    }`}
+                  >
+                    Hard Core CPU
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <label className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">Select Registered Opponent</label>
+                {registeredPlayers.length === 0 ? (
+                  <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-xl text-xs text-orange-300 text-center font-medium leading-relaxed">
+                    No other registered teams found yet. Encourage other players to register their team names to compete against them!
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <select
+                      value={selectedOpponent?.id || ''}
+                      onChange={(e) => {
+                        const opp = registeredPlayers.find(p => p.id === e.target.value);
+                        if (opp) setSelectedOpponent(opp);
+                      }}
+                      className="w-full bg-[#1A2238] border border-slate-700 text-slate-200 py-3.5 px-4 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500/50 appearance-none cursor-pointer"
+                    >
+                      {registeredPlayers.map((player) => (
+                        <option key={player.id} value={player.id}>
+                          {player.name} ({player.teamName})
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                      ▼
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <button
             onClick={startToss}
-            className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-black text-sm uppercase py-4 rounded-xl shadow-[0_4px_0_0_#9a3412] active:translate-y-1 active:shadow-none transition-all duration-100 flex items-center justify-center gap-2 cursor-pointer"
+            disabled={opponentType === 'registered' && registeredPlayers.length === 0}
+            className={`w-full text-white font-display font-black text-sm uppercase py-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-100 cursor-pointer ${
+              opponentType === 'registered' && registeredPlayers.length === 0
+                ? 'bg-slate-700/50 border border-slate-700 text-slate-500 cursor-not-allowed shadow-none'
+                : 'bg-gradient-to-r from-orange-500 to-red-600 shadow-[0_4px_0_0_#9a3412] active:translate-y-1 active:shadow-none'
+            }`}
           >
             <Play className="w-4 h-4 fill-current" /> Start Toss
           </button>
@@ -587,12 +730,12 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    <p className="text-sm font-bold text-red-400">😢 CPU won the Toss!</p>
+                    <p className="text-sm font-bold text-red-400">😢 {player2Name} won the Toss!</p>
                     <button
                       onClick={handleCpuRoleSelection}
                       className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-bold text-xs uppercase py-2 rounded-lg cursor-pointer"
                     >
-                      Wait for CPU Decision <ArrowRight className="inline w-3 h-3 ml-1" />
+                      Wait for {opponentType === 'registered' ? 'Opponent' : 'CPU'} Decision <ArrowRight className="inline w-3 h-3 ml-1" />
                     </button>
                   </div>
                 )}
@@ -700,7 +843,9 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
                   {currentBowler}
                 </h4>
                 <p className="text-[10px] font-mono text-slate-400 mb-4 font-bold tracking-wider">
-                  {!isPlayerBattingNow ? '👤 (YOU)' : '🤖 (CPU)'}
+                  {!isPlayerBattingNow 
+                    ? '👤 (YOU)' 
+                    : (opponentType === 'registered' && selectedOpponent ? `🛡️ (${selectedOpponent.teamName})` : '🤖 (CPU)')}
                 </p>
 
                 {/* Bowler Gesture Circle */}
@@ -753,7 +898,9 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
                   {currentBatsman}
                 </h4>
                 <p className="text-[10px] font-mono text-slate-400 mb-4 font-bold tracking-wider">
-                  {isPlayerBattingNow ? '👤 (YOU)' : '🤖 (CPU)'}
+                  {isPlayerBattingNow 
+                    ? '👤 (YOU)' 
+                    : (opponentType === 'registered' && selectedOpponent ? `🛡️ (${selectedOpponent.teamName})` : '🤖 (CPU)')}
                 </p>
 
                 {/* Batter Gesture Circle */}
@@ -943,5 +1090,6 @@ export default function DigitalGameSection({ userProfile, onGameSaved }: Digital
 
 interface DigitalGameProps {
   userProfile: UserProfile | null;
+  playerTeamName?: string | null;
   onGameSaved: () => void;
 }

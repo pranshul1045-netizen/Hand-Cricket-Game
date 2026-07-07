@@ -60,10 +60,6 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (schoolyardLocked) {
-      setError('Registration is currently locked and frozen.');
-      return;
-    }
     if (!name.trim() || !classSec.trim() || !school.trim() || !whatsapp.trim() || !pin.trim()) {
       setError('Please fill in all fields.');
       return;
@@ -115,10 +111,6 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
   };
 
   const handleConfirmClick = async (reg: any) => {
-    if (schoolyardLocked) {
-      setActionError("Tournament is locked. Cannot confirm registration.");
-      return;
-    }
     try {
       setActionError('');
       
@@ -199,19 +191,7 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
         <div className="bg-[#161D2F] border border-slate-700 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden max-w-lg mx-auto">
           <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/5 rounded-full blur-2xl transform translate-x-12 -translate-y-12"></div>
           
-          {schoolyardLocked ? (
-            <div className="text-center space-y-6 py-8 animate-in fade-in duration-300">
-              <div className="w-16 h-16 bg-red-500/10 border-2 border-red-500/30 rounded-full flex items-center justify-center mx-auto text-red-400 shadow-lg">
-                <Lock className="w-8 h-8" />
-              </div>
-              <div className="space-y-2">
-                <h3 className="font-display font-black text-xl text-slate-100 uppercase tracking-tight">Registration Locked</h3>
-                <p className="text-slate-400 text-sm max-w-sm mx-auto font-sans leading-relaxed">
-                  The tournament registration phase has been locked by the administrator. No further entries are allowed for this tournament stage. Keep an eye on updates!
-                </p>
-              </div>
-            </div>
-          ) : submitted ? (
+          {submitted ? (
             <div className="text-center space-y-6 py-6 animate-in fade-in duration-300">
               <div className="w-16 h-16 bg-green-500/10 border-2 border-green-500/30 rounded-full flex items-center justify-center mx-auto text-green-400 shadow-lg">
                 <CheckCircle2 className="w-8 h-8" />
@@ -436,14 +416,9 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
                         <div className="flex items-center justify-center gap-1.5">
                           {reg.status !== 'confirmed' ? (
                             <button
-                              disabled={schoolyardLocked}
                               onClick={() => handleConfirmClick(reg)}
-                              className={`p-1.5 rounded transition-all ${
-                                schoolyardLocked
-                                  ? 'opacity-30 cursor-not-allowed text-slate-600'
-                                  : 'text-slate-400 hover:text-green-400 hover:bg-green-500/10 cursor-pointer'
-                              }`}
-                              title={schoolyardLocked ? "Tournament Locked" : "Confirm Registration"}
+                              className="p-1.5 text-slate-400 hover:text-green-400 hover:bg-green-500/10 rounded transition-all cursor-pointer"
+                              title="Confirm Registration"
                             >
                               <CheckCircle className="w-4 h-4" />
                             </button>
@@ -457,14 +432,9 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
                             </button>
                           )}
                           <button
-                            disabled={schoolyardLocked}
                             onClick={() => handleDeleteClick(reg)}
-                            className={`p-1.5 rounded transition-all ${
-                              schoolyardLocked
-                                ? 'opacity-30 cursor-not-allowed text-slate-600'
-                                : 'text-slate-500 hover:text-red-400 hover:bg-red-500/10 cursor-pointer'
-                            }`}
-                            title={schoolyardLocked ? "Tournament Locked" : "Delete Registration"}
+                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-all cursor-pointer"
+                            title="Delete Registration"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -608,10 +578,6 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
                 onClick={async () => {
                   const id = regToDelete.id;
                   setRegToDelete(null);
-                  if (schoolyardLocked) {
-                    setActionError("Tournament is locked. Cannot delete registration.");
-                    return;
-                  }
                   try {
                     setActionError('');
                     await deleteDoc(doc(db, 'registrations', id));

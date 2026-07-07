@@ -143,6 +143,13 @@ export default function App() {
   const [adminError, setAdminError] = useState('');
   const [signingIn, setSigningIn] = useState(false);
 
+  // Player Team Name states for Digital Tournament
+  const [playerTeamName, setPlayerTeamName] = useState<string | null>(null);
+  const [loadingTeamName, setLoadingTeamName] = useState(false);
+  const [teamNameInput, setTeamNameInput] = useState('');
+  const [isSavingTeam, setIsSavingTeam] = useState(false);
+  const [teamError, setTeamError] = useState('');
+
   // Is super admin check
   const isAdmin = 
     user?.email === 'pranshul1045@gmail.com' || 
@@ -245,6 +252,50 @@ export default function App() {
     });
     return () => unsubLock();
   }, []);
+
+  const isPlayerLogin = userProfile?.uid && userProfile.uid.startsWith('player_');
+  const playerDocId = isPlayerLogin ? userProfile.uid.replace('player_', '').toLowerCase() : '';
+
+  useEffect(() => {
+    if (!isPlayerLogin || !playerDocId) {
+      setPlayerTeamName(null);
+      setLoadingTeamName(false);
+      return;
+    }
+    setLoadingTeamName(true);
+    const docRef = doc(db, 'playerProfiles', playerDocId);
+    const unsub = onSnapshot(docRef, (docSnap) => {
+      setLoadingTeamName(false);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setPlayerTeamName(data.teamName || '');
+      } else {
+        setPlayerTeamName('');
+      }
+    }, (err) => {
+      console.error("Error fetching player team name:", err);
+      setLoadingTeamName(false);
+    });
+    return () => unsub();
+  }, [isPlayerLogin, playerDocId]);
+
+  const handleSaveTeamName = async (nameInput: string) => {
+    if (!nameInput.trim() || !playerDocId) return;
+    try {
+      const docRef = doc(db, 'playerProfiles', playerDocId);
+      await setDoc(docRef, {
+        teamName: nameInput.trim()
+      }, { merge: true });
+      if (userProfile) {
+        const updatedProfile = { ...userProfile, teamName: nameInput.trim() };
+        setUserProfile(updatedProfile);
+        localStorage.setItem('hcl_local_guest_profile', JSON.stringify(updatedProfile));
+      }
+    } catch (err) {
+      console.error("Failed to save team name: ", err);
+      throw err;
+    }
+  };
 
   const handleGoogleLogin = async () => {
     setSigningIn(true);
@@ -575,17 +626,24 @@ export default function App() {
               <ShieldAlert className="w-3.5 h-3.5" /> Admin
             </div>
           )}
-          <div className="flex items-center gap-2 bg-[#161D2F] px-3 py-1.5 rounded-lg border border-slate-700">
-            <span className="text-xs font-bold text-slate-300">
-              {userProfile?.displayName || 'Player'}
-            </span>
-            <button
-              onClick={handleLogout}
-              className="p-1 text-slate-400 hover:text-red-400 transition-colors"
-              title="Logout from Arena"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-            </button>
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-2 bg-[#161D2F] px-3 py-1.5 rounded-lg border border-slate-700">
+              <span className="text-xs font-bold text-slate-300">
+                {userProfile?.displayName || 'Player'}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="p-1 text-slate-400 hover:text-red-400 transition-colors cursor-pointer"
+                title="Logout from Arena"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {playerTeamName && (
+              <span className="text-[9px] font-mono font-bold text-orange-400 uppercase tracking-wider mt-1 mr-1">
+                🛡️ Team: {playerTeamName}
+              </span>
+            )}
           </div>
         </div>
       </header>
@@ -719,31 +777,127 @@ export default function App() {
           )
         ) : (
           /* DIGITAL TOURNAMENT MODES */
-          <>
-            {activeTab === 'digital_home' && (
-              <LockedTab 
-                title="Digital Home Screen" 
-                description="The digital tournament home feed, dynamic brackets, and live stream overlays are currently locked by the administrator until group stages conclude."
-              />
-            )}
-            {activeTab === 'game' && (
-              <DigitalGameSection 
-                userProfile={userProfile} 
-                onGameSaved={() => {
-                  // trigger points re-sync if desired
+          isPlayerLogin && playerTeamName === '' ? (
+            <div className="max-w-xl mx-auto my-12 bg-[#161D2F] border-2 border-orange-500/30 rounded-3xl p-8 md:p-12 shadow-2xl relative overflow-hidden animate-in fade-in zoom-in-95 duration-300 text-center">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/5 rounded-full blur-3xl transform translate-x-20 -translate-y-20"></div>
+              
+              <div className="w-20 h-20 bg-orange-500/10 border-2 border-orange-500/30 rounded-full flex items-center justify-center mx-auto text-orange-400 shadow-lg">
+                <Trophy className="w-10 h-10" />
+              </div>
+
+              <div className="space-y-4 mt-6">
+                <h2 className="font-display font-black text-3xl text-white uppercase tracking-tight leading-tight">
+                  Choose Your Team Name
+                </h2>
+                <div className="inline-block bg-orange-500/20 border border-orange-500/40 text-orange-400 font-mono text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">
+                  Digital Arena Entrance
+                </div>
+                <p className="text-slate-400 text-sm font-sans max-w-sm mx-auto leading-relaxed">
+                  Welcome, <span className="text-slate-200 font-bold">{userProfile?.displayName}</span>! To begin participating in the HCL Digital Tournament, you must declare your official Team Name.
+                </p>
+                <div className="bg-red-500/10 border border-red-500/20 p-3.5 rounded-xl text-left">
+                  <p className="text-[11px] font-mono font-bold text-red-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <ShieldAlert className="w-4 h-4 shrink-0" /> Critical Rule
+                  </p>
+                  <p className="text-xs text-slate-300 mt-1">
+                    Once written and locked, your team name <strong className="text-white">cannot be changed</strong>. It will be permanently fixed for all matches, points tables, and seedings in this tournament.
+                  </p>
+                </div>
+              </div>
+
+              <div className="h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent my-6"></div>
+
+              <form 
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!teamNameInput.trim()) {
+                    setTeamError('Please enter a team name');
+                    return;
+                  }
+                  if (teamNameInput.trim().length < 3) {
+                    setTeamError('Team name must be at least 3 characters');
+                    return;
+                  }
+                  setTeamError('');
+                  setIsSavingTeam(true);
+                  try {
+                    await handleSaveTeamName(teamNameInput.trim());
+                  } catch (err) {
+                    setTeamError('Failed to lock team name. Please try again.');
+                  } finally {
+                    setIsSavingTeam(false);
+                  }
                 }} 
-              />
-            )}
-            {activeTab === 'digital_league' && (
-              <LockedTab 
-                title="Digital Scorecards" 
-                description="Live digital tournament brackets, participant rankings, and play-off scorecards are locked. They will unlock automatically once registration closes and seedings are generated."
-              />
-            )}
-            {activeTab === 'rules' && (
-              <RulesSection />
-            )}
-          </>
+                className="space-y-5 text-left"
+              >
+                {teamError && (
+                  <div className="bg-red-500/15 border border-red-500/30 text-red-400 text-xs py-2.5 px-3.5 rounded-xl text-center font-bold">
+                    {teamError}
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                    Your Official Team Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={30}
+                    value={teamNameInput}
+                    onChange={(e) => setTeamNameInput(e.target.value)}
+                    placeholder="E.g. Royal Strikers, Mumbai Rockets"
+                    className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3.5 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-bold tracking-wide"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSavingTeam || !teamNameInput.trim()}
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-black text-xs uppercase tracking-wide py-4 rounded-xl shadow-[0_3.5px_0_0_#9a3412] hover:brightness-105 active:translate-y-0.5 active:shadow-none transition-all duration-100 flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {isSavingTeam ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Locking Team Name...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 fill-current" />
+                      Lock Team Name & Enter Tournament
+                    </>
+                  )}
+                </button>
+              </form>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'digital_home' && (
+                <LockedTab 
+                  title="Digital Home Screen" 
+                  description="The digital tournament home feed, dynamic brackets, and live stream overlays are currently locked by the administrator until group stages conclude."
+                />
+              )}
+              {activeTab === 'game' && (
+                <DigitalGameSection 
+                  userProfile={userProfile} 
+                  playerTeamName={playerTeamName}
+                  onGameSaved={() => {
+                    // trigger points re-sync if desired
+                  }} 
+                />
+              )}
+              {activeTab === 'digital_league' && (
+                <LockedTab 
+                  title="Digital Scorecards" 
+                  description="Live digital tournament brackets, participant rankings, and play-off scorecards are locked. They will unlock automatically once registration closes and seedings are generated."
+                />
+              )}
+              {activeTab === 'rules' && (
+                <RulesSection />
+              )}
+            </>
+          )
         )}
       </main>
 

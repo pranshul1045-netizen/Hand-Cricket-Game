@@ -7,6 +7,7 @@ export interface UserProfile {
   battingStyle?: 'Right-handed' | 'Left-handed';
   favoriteNumber?: number; // 1-6
   createdAt: any; // Timestamp or date string
+  teamName?: string;
 }
 
 export interface SchoolMatch {
@@ -31,7 +32,10 @@ export interface DigitalMatch {
   id: string;
   playerUid: string;
   playerName: string;
+  playerTeamName?: string;
   opponentName: string; // "CPU (Easy)", "CPU (Hard)", "Local Player"
+  opponentTeamName?: string;
+  opponentUid?: string;
   playerRuns: number;
   opponentRuns: number;
   winner: 'player' | 'opponent';
