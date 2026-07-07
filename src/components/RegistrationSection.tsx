@@ -38,8 +38,6 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
 
   // Listen to registrations (Real-time sync)
   useEffect(() => {
-    if (!isAdmin) return;
-
     setLoadingRegs(true);
     const q = query(collection(db, 'registrations'), orderBy('createdAt', 'desc'));
     
@@ -56,7 +54,9 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
     });
 
     return () => unsub();
-  }, [isAdmin]);
+  }, []);
+
+  const isClosed = new Date() >= new Date('2026-07-18T00:00:00') || registrations.length >= 48;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -191,7 +191,24 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
         <div className="bg-[#161D2F] border border-slate-700 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden max-w-lg mx-auto">
           <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/5 rounded-full blur-2xl transform translate-x-12 -translate-y-12"></div>
           
-          {submitted ? (
+          {loadingRegs ? (
+            <div className="py-12 flex flex-col justify-center items-center gap-2">
+              <Loader2 className="w-8 h-8 text-orange-500 animate-spin" />
+              <p className="text-xs font-mono font-semibold text-slate-400">Checking form status...</p>
+            </div>
+          ) : isClosed ? (
+            <div className="text-center space-y-6 py-6 animate-in fade-in duration-300">
+              <div className="w-16 h-16 bg-red-500/10 border-2 border-red-500/30 rounded-full flex items-center justify-center mx-auto text-red-400 shadow-lg">
+                <Lock className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-display font-black text-2xl text-slate-100 uppercase tracking-tight">Registration Closed</h3>
+                <p className="text-slate-400 text-sm max-w-sm mx-auto">
+                  The tournament has reached its maximum capacity of 48 players or the registration deadline (July 18th) has passed.
+                </p>
+              </div>
+            </div>
+          ) : submitted ? (
             <div className="text-center space-y-6 py-6 animate-in fade-in duration-300">
               <div className="w-16 h-16 bg-green-500/10 border-2 border-green-500/30 rounded-full flex items-center justify-center mx-auto text-green-400 shadow-lg">
                 <CheckCircle2 className="w-8 h-8" />
