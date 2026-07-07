@@ -33,7 +33,24 @@ const comments = {
   ]
 };
 
-export default function DigitalGameSection({ userProfile, playerTeamName, onGameSaved }: DigitalGameProps) {
+const isPlayerOnline = (lastActive: string | null) => {
+  if (!lastActive) return false;
+  try {
+    const activeTime = new Date(lastActive).getTime();
+    const now = Date.now();
+    return (now - activeTime) < 30000;
+  } catch (e) {
+    return false;
+  }
+};
+
+export default function DigitalGameSection({ 
+  userProfile, 
+  playerTeamName, 
+  activeChallengeId, 
+  setActiveChallengeId, 
+  onGameSaved 
+}: DigitalGameProps) {
   const hasRegisteredTeam = !!(playerTeamName && playerTeamName.trim() !== '');
 
   // Game Setup States
@@ -60,7 +77,8 @@ export default function DigitalGameSection({ userProfile, playerTeamName, onGame
             id: docId,
             name: data.name,
             teamName: data.teamName,
-            photoURL: data.photoURL || ''
+            photoURL: data.photoURL || '',
+            lastActive: data.lastActive || null
           });
         }
       });
@@ -157,6 +175,221 @@ export default function DigitalGameSection({ userProfile, playerTeamName, onGame
     }
   }, [turnCountdown, pendingP1Move]);
 
+  // --- MULTIPLAYER REAL-TIME DUELS ---
+  const [sendingChallenge, setSendingChallenge] = useState<boolean>(false);
+  const [challengeStatusMessage, setChallengeStatusMessage] = useState<string>('');
+  const [challengeTimeout, setChallengeTimeout] = useState<number | null>(null);
+  const [challengeError, setChallengeError] = useState<string | null>(null);
+
+  const [activeChallengeData, setActiveChallengeData] = useState<any>(null);
+  const [isMyTurnSubmitted, setIsMyTurnSubmitted] = useState<boolean>(false);
+  const [multiplayerTurnSeconds, setMultiplayerTurnSeconds] = useState<number>(15);
+
+  const myPlayerRole: 'p1' | 'p2' | null = activeChallengeData
+    ? (activeChallengeData.challengerId === (userProfile?.uid || '').replace('player_', '').toLowerCase() ? 'p1' : 'p2')
+    : null;
+
+  // Challenge Timeout Countdown
+  useEffect(() => {
+    if (challengeTimeout === null) return;
+    if (challengeTimeout > 0) {
+      const timer = setTimeout(() => {
+        setChallengeTimeout(challengeTimeout - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    } else {
+      setChallengeTimeout(null);
+      setSendingChallenge(false);
+      setChallengeError("Challenge request timed out. Opponent is away or offline.");
+    }
+  }, [challengeTimeout]);
+
+  // Subscribe to the active challenge doc
+  useEffect(() => {
+    if (!activeChallengeId) {
+      setActiveChallengeData(null);
+      return;
+    }
+    const docRef = doc(db, 'gameChallenges', activeChallengeId);
+    const unsub = onSnapshot(docRef, async (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setActiveChallengeData(data);
+        
+        // Determine if I have submitted my move for this turn
+        const isChallenger = data.challengerId === (userProfile?.uid || '').replace('player_', '').toLowerCase();
+        const mySubmitted = isChallenger ? data.p1MoveSubmitted : data.p2MoveSubmitted;
+        setIsMyTurnSubmitted(!!mySubmitted);
+
+        // Process turn resolution on Challenger (p1) side if both moves are submitted
+        if (data.p1MoveSubmitted && data.p2MoveSubmitted && isChallenger) {
+          resolveMultiplayerTurn(data);
+        }
+      }
+    });
+    return () => unsub();
+  }, [activeChallengeId, userProfile]);
+
+  // Turn-based real-time match countdown timer
+  useEffect(() => {
+    if (!activeChallengeData || activeChallengeData.status !== 'accepted' || activeChallengeData.gameEnded) {
+      setMultiplayerTurnSeconds(15);
+      return;
+    }
+    
+    const interval = setInterval(() => {
+      const lastTime = new Date(activeChallengeData.lastTurnTime || activeChallengeData.updatedAt).getTime();
+      const now = Date.now();
+      const diff = Math.floor((now - lastTime) / 1000);
+      const remaining = Math.max(0, 15 - diff);
+      setMultiplayerTurnSeconds(remaining);
+      
+      // Auto-submit if countdown reaches 0 and player hasn't submitted yet
+      if (remaining === 0 && !isMyTurnSubmitted && myPlayerRole) {
+        clearInterval(interval);
+        const autoMove = Math.floor(Math.random() * 6) + 1;
+        submitMultiplayerMove(autoMove, true);
+      }
+    }, 500);
+    
+    return () => clearInterval(interval);
+  }, [activeChallengeData, isMyTurnSubmitted, myPlayerRole]);
+
+  // Determine coin flip tossWinner on Challenger's side
+  useEffect(() => {
+    if (activeChallengeData && activeChallengeData.status === 'accepted' && !activeChallengeData.tossWinner && myPlayerRole === 'p1') {
+      const winner = Math.random() < 0.5 ? 'p1' : 'p2';
+      const docRef = doc(db, 'gameChallenges', activeChallengeId!);
+      setDoc(docRef, {
+        tossWinner: winner,
+        updatedAt: new Date().toISOString()
+      }, { merge: true }).catch(console.error);
+    }
+  }, [activeChallengeData, myPlayerRole, activeChallengeId]);
+
+  const submitMultiplayerMove = async (move: number, isAuto = false) => {
+    if (!activeChallengeId || !myPlayerRole) return;
+    try {
+      const docRef = doc(db, 'gameChallenges', activeChallengeId);
+      const updates: any = {};
+      if (myPlayerRole === 'p1') {
+        updates.p1LastMove = move;
+        updates.p1MoveSubmitted = true;
+      } else {
+        updates.p2LastMove = move;
+        updates.p2MoveSubmitted = true;
+      }
+      if (isAuto) {
+        updates.commentary = `Auto-submitted for player due to turn timeout!`;
+      }
+      await setDoc(docRef, updates, { merge: true });
+    } catch (err) {
+      console.error("Error submitting move:", err);
+    }
+  };
+
+  const chooseMultiplayerRole = async (choice: 'batting' | 'bowling') => {
+    if (!activeChallengeId) return;
+    try {
+      const docRef = doc(db, 'gameChallenges', activeChallengeId);
+      await setDoc(docRef, {
+        tossChoice: choice,
+        currentInnings: 1,
+        p1Score: 0,
+        p2Score: 0,
+        currentTurn: 0,
+        p1MoveSubmitted: false,
+        p2MoveSubmitted: false,
+        gameEnded: false,
+        commentary: "Match started! Submit your first move.",
+        lastTurnTime: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.error("Error setting role:", err);
+    }
+  };
+
+  const resolveMultiplayerTurn = async (data: any) => {
+    const p1Move = data.p1LastMove;
+    const p2Move = data.p2LastMove;
+    
+    const isP1BatsmanIn1 = (data.tossWinner === 'p1' && data.tossChoice === 'batting') || 
+                           (data.tossWinner === 'p2' && data.tossChoice === 'bowling');
+    const isP1Batsman = data.currentInnings === 1 ? isP1BatsmanIn1 : !isP1BatsmanIn1;
+    
+    let nextInnings = data.currentInnings;
+    let p1Score = data.p1Score ?? 0;
+    let p2Score = data.p2Score ?? 0;
+    let gameEnded = data.gameEnded ?? false;
+    let status = data.status;
+    let commentary = '';
+    
+    const batsmanName = isP1Batsman ? data.challengerName : data.targetName;
+    const bowlerName = isP1Batsman ? data.targetName : data.challengerName;
+    
+    if (p1Move === p2Move) {
+      // OUT!
+      commentary = `OUT! ${batsmanName} is out for ${isP1Batsman ? p1Score : p2Score} runs! Both players played ${p1Move}.`;
+      
+      if (data.currentInnings === 1) {
+        nextInnings = 2;
+        commentary += ` Target for ${bowlerName} is ${(isP1Batsman ? p1Score : p2Score) + 1} runs.`;
+      } else {
+        gameEnded = true;
+        status = 'completed';
+        
+        const targetRuns = (isP1BatsmanIn1 ? p1Score : p2Score) + 1;
+        const chasingScore = isP1Batsman ? p1Score : p2Score;
+        
+        if (chasingScore >= targetRuns) {
+          commentary = `Match over! ${batsmanName} wins by wickets!`;
+        } else if (chasingScore === targetRuns - 1) {
+          commentary = `Match tied! Both teams scored ${chasingScore} runs!`;
+        } else {
+          commentary = `Match over! ${bowlerName} wins by ${targetRuns - 1 - chasingScore} runs!`;
+        }
+      }
+    } else {
+      const runs = isP1Batsman ? p1Move : p2Move;
+      if (isP1Batsman) {
+        p1Score += runs;
+      } else {
+        p2Score += runs;
+      }
+      commentary = `${batsmanName} scores ${runs} runs. (${p1Move} vs ${p2Move})`;
+      
+      if (data.currentInnings === 2) {
+        const firstInningsScore = isP1BatsmanIn1 ? p1Score : p2Score;
+        const currentChasingScore = isP1Batsman ? p1Score : p2Score;
+        if (currentChasingScore > firstInningsScore) {
+          gameEnded = true;
+          status = 'completed';
+          commentary = `Match over! ${batsmanName} chased down the target successfully!`;
+        }
+      }
+    }
+    
+    try {
+      const docRef = doc(db, 'gameChallenges', data.id);
+      await setDoc(docRef, {
+        p1Score,
+        p2Score,
+        currentInnings: nextInnings,
+        currentTurn: (data.currentTurn ?? 0) + 1,
+        p1MoveSubmitted: false,
+        p2MoveSubmitted: false,
+        gameEnded,
+        status,
+        commentary,
+        lastTurnTime: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.error("Error writing resolved multiplayer turn:", err);
+    }
+  };
+  // --------------------------------------
+
   const startActualGameAfterCountdown = () => {
     setMatchStartTime(Date.now());
     setPhase('toss');
@@ -166,9 +399,66 @@ export default function DigitalGameSection({ userProfile, playerTeamName, onGame
     setTossWinner(null);
   };
 
-  // Trigger setup with 3-second countdown
-  const startToss = () => {
-    setCountdown(3);
+  // Trigger setup with 3-second countdown or initiate real-time challenge
+  const startToss = async () => {
+    if (opponentType === 'registered') {
+      if (!selectedOpponent) return;
+      if (!isPlayerOnline(selectedOpponent.lastActive)) {
+        setChallengeError("Opponent is offline. Please choose an online player (indicated by a green dot) or play with the CPU.");
+        return;
+      }
+
+      setSendingChallenge(true);
+      setChallengeError(null);
+      setChallengeStatusMessage(`Challenging ${selectedOpponent.name} to a real-time Hand Cricket duel...`);
+
+      const challengerId = (userProfile?.uid || 'guest_local').replace('player_', '').toLowerCase();
+      const targetId = selectedOpponent.id.toLowerCase();
+      const challengeId = `${challengerId}_${targetId}_${Date.now()}`;
+
+      try {
+        const challengeDocRef = doc(db, 'gameChallenges', challengeId);
+        await setDoc(challengeDocRef, {
+          id: challengeId,
+          challengerId,
+          challengerName: userProfile?.displayName || 'Challenger',
+          challengerTeamName: playerTeamName || 'Unnamed Team',
+          targetId,
+          targetName: selectedOpponent.name,
+          targetTeamName: selectedOpponent.teamName,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        setChallengeTimeout(25);
+
+        const unsubChallenge = onSnapshot(challengeDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.status === 'accepted') {
+              unsubChallenge();
+              setSendingChallenge(false);
+              setChallengeTimeout(null);
+              if (setActiveChallengeId) {
+                setActiveChallengeId(challengeId);
+              }
+            } else if (data.status === 'declined') {
+              unsubChallenge();
+              setSendingChallenge(false);
+              setChallengeTimeout(null);
+              setChallengeError(`${selectedOpponent.name} declined your challenge.`);
+            }
+          }
+        });
+      } catch (err) {
+        console.error("Error creating challenge:", err);
+        setSendingChallenge(false);
+        setChallengeError("Failed to send challenge. Please try again.");
+      }
+    } else {
+      setCountdown(3);
+    }
   };
 
   const handleTossChoice = (choice: 'odd' | 'even') => {
@@ -454,8 +744,383 @@ export default function DigitalGameSection({ userProfile, playerTeamName, onGame
     }
   };
 
+  const renderMultiplayerArena = () => {
+    if (!activeChallengeData) {
+      return (
+        <div className="bg-[#161D2F] border border-slate-700 rounded-3xl p-12 text-center space-y-6 max-w-lg mx-auto shadow-xl">
+          <RefreshCw className="w-12 h-12 animate-spin text-orange-500 mx-auto" />
+          <p className="text-slate-300 font-medium">Synchronizing live duel session...</p>
+        </div>
+      );
+    }
+
+    // 1. Toss Role Selection Phase
+    if (!activeChallengeData.tossChoice) {
+      const isWinnerMe = activeChallengeData.tossWinner === myPlayerRole;
+      const winnerName = activeChallengeData.tossWinner === 'p1' ? activeChallengeData.challengerName : activeChallengeData.targetName;
+      
+      return (
+        <div className="bg-[#161D2F] border border-slate-700 rounded-3xl p-8 max-w-xl mx-auto shadow-2xl space-y-8 text-center relative overflow-hidden">
+          <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-orange-500 to-purple-600 animate-pulse" />
+          
+          <div className="space-y-2">
+            <span className="text-[10px] font-mono font-black text-orange-400 bg-orange-500/10 px-3 py-1 rounded-full uppercase tracking-widest">
+              🪙 Real-time Coin Flip
+            </span>
+            <h2 className="font-display font-black text-3xl text-slate-100 tracking-tight uppercase">
+              TOSS DECIDED!
+            </h2>
+          </div>
+
+          {!activeChallengeData.tossWinner ? (
+            <div className="py-6 space-y-4">
+              <RefreshCw className="w-12 h-12 animate-spin text-orange-400 mx-auto" />
+              <p className="text-sm font-medium text-slate-400">Flipping the digital coin...</p>
+            </div>
+          ) : isWinnerMe ? (
+            <div className="space-y-6">
+              <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-2xl max-w-md mx-auto">
+                <span className="text-2xl">🎉</span>
+                <p className="text-sm font-bold text-orange-400 mt-2">
+                  CONGRATULATIONS! YOU WON THE TOSS!
+                </p>
+                <p className="text-xs text-slate-400 mt-1">
+                  Choose whether you want to bat or bowl first.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 max-w-md mx-auto">
+                <button
+                  onClick={() => chooseMultiplayerRole('batting')}
+                  className="py-4 bg-gradient-to-br from-orange-500 to-red-600 hover:brightness-105 active:translate-y-0.5 transition-all text-white font-display font-black text-sm uppercase rounded-2xl shadow-lg cursor-pointer"
+                >
+                  🏏 Bat First
+                </button>
+                <button
+                  onClick={() => chooseMultiplayerRole('bowling')}
+                  className="py-4 bg-[#1A2238] border border-slate-700 text-slate-200 hover:bg-slate-800 active:translate-y-0.5 transition-all font-display font-black text-sm uppercase rounded-2xl cursor-pointer"
+                >
+                  🥎 Bowl First
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-4 max-w-md mx-auto">
+              <p className="text-sm text-slate-300 font-medium">
+                🛡️ <strong>{winnerName}</strong> won the toss!
+              </p>
+              <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                <RefreshCw className="w-4 h-4 animate-spin text-orange-500" />
+                Waiting for opponent to choose Batting/Bowling...
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // 3. Match Finished / Results Screen
+    if (activeChallengeData.status === 'completed' || activeChallengeData.gameEnded) {
+      const isWinnerMe = (activeChallengeData.p1Score > activeChallengeData.p2Score && myPlayerRole === 'p1') ||
+                         (activeChallengeData.p2Score > activeChallengeData.p1Score && myPlayerRole === 'p2');
+      const isTie = activeChallengeData.p1Score === activeChallengeData.p2Score;
+      
+      return (
+        <div className="bg-[#161D2F] border border-slate-700 rounded-3xl p-8 max-w-xl mx-auto shadow-2xl space-y-8 text-center relative overflow-hidden">
+          <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-orange-500 to-red-500" />
+          
+          <div className="space-y-2">
+            <span className="text-[10px] font-mono font-black text-orange-400 bg-orange-500/10 px-3 py-1 rounded-full uppercase tracking-widest">
+              🏆 Match Completed
+            </span>
+            <h2 className="font-display font-black text-3xl text-slate-100 tracking-tight uppercase">
+              {isTie ? "⚔️ IT'S A TIE DUEL!" : isWinnerMe ? "🎉 YOU ARE VICTORIOUS!" : "🛡️ OPPONENT VICTORIOUS!"}
+            </h2>
+          </div>
+
+          <div className="p-6 bg-slate-900/60 border border-slate-800 rounded-2xl max-w-md mx-auto space-y-4">
+            <p className="text-sm font-sans font-medium text-slate-300 leading-relaxed">
+              {activeChallengeData.commentary}
+            </p>
+
+            <div className="grid grid-cols-2 gap-4 border-t border-slate-800 pt-4 text-left">
+              <div>
+                <p className="text-[10px] font-mono font-bold text-slate-500 uppercase">Your score</p>
+                <p className="font-display font-black text-2xl text-orange-400">
+                  {myPlayerRole === 'p1' ? activeChallengeData.p1Score : activeChallengeData.p2Score}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] font-mono font-bold text-slate-500 uppercase">Opponent score</p>
+                <p className="font-display font-black text-2xl text-slate-100">
+                  {myPlayerRole === 'p1' ? activeChallengeData.p2Score : activeChallengeData.p1Score}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              if (setActiveChallengeId) setActiveChallengeId(null);
+            }}
+            className="w-full max-w-md mx-auto py-3.5 bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-black text-sm uppercase rounded-xl shadow-lg hover:brightness-105 active:translate-y-0.5 transition-all cursor-pointer"
+          >
+            Quit to Digital Home
+          </button>
+        </div>
+      );
+    }
+
+    // 2. Playing Phase
+    const isP1BatsmanIn1 = (activeChallengeData.tossWinner === 'p1' && activeChallengeData.tossChoice === 'batting') || 
+                           (activeChallengeData.tossWinner === 'p2' && activeChallengeData.tossChoice === 'bowling');
+    const isP1Batsman = activeChallengeData.currentInnings === 1 ? isP1BatsmanIn1 : !isP1BatsmanIn1;
+    const isMyBattingNow = (myPlayerRole === 'p1' && isP1Batsman) || (myPlayerRole === 'p2' && !isP1Batsman);
+
+    const firstInningsScore = isP1BatsmanIn1 ? activeChallengeData.p1Score : activeChallengeData.p2Score;
+    const targetScore = activeChallengeData.currentInnings === 2 ? firstInningsScore + 1 : null;
+
+    const batsmanName = isP1Batsman ? activeChallengeData.challengerName : activeChallengeData.targetName;
+    const bowlerName = isP1Batsman ? activeChallengeData.targetName : activeChallengeData.challengerName;
+    
+    const batsmanScore = isP1Batsman ? activeChallengeData.p1Score : activeChallengeData.p2Score;
+
+    // Moves representation
+    const revealMoves = activeChallengeData.p1MoveSubmitted && activeChallengeData.p2MoveSubmitted;
+    const mySubmittedMove = myPlayerRole === 'p1' ? activeChallengeData.p1LastMove : activeChallengeData.p2LastMove;
+    
+    const displayBatsmanMove = revealMoves 
+      ? (isP1Batsman ? activeChallengeData.p1LastMove : activeChallengeData.p2LastMove)
+      : (isMyBattingNow && isMyTurnSubmitted ? mySubmittedMove : null);
+
+    const displayBowlerMove = revealMoves
+      ? (isP1Batsman ? activeChallengeData.p2LastMove : activeChallengeData.p1LastMove)
+      : (!isMyBattingNow && isMyTurnSubmitted ? mySubmittedMove : null);
+
+    return (
+      <div className="space-y-6 animate-fade-in">
+        {/* Match Header with Live Scorecards */}
+        <div className="bg-[#161D2F] border border-slate-700 rounded-3xl p-6 shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-orange-500 to-purple-600" />
+          
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse" />
+                <span className="text-[10px] font-mono font-bold tracking-widest text-slate-400 uppercase">
+                  LIVE MULTIPLAYER DUEL
+                </span>
+              </div>
+              <h2 className="font-display font-black text-2xl text-slate-100 tracking-tight uppercase pt-0.5">
+                🏏 {activeChallengeData.challengerName} vs {activeChallengeData.targetName}
+              </h2>
+            </div>
+            <div className="bg-orange-500/10 border border-orange-500/20 text-orange-400 px-3 py-1.5 rounded-xl font-mono text-xs font-bold uppercase tracking-wider">
+              Innings {activeChallengeData.currentInnings} • {isMyBattingNow ? 'YOU BATTING' : 'YOU BOWLING'}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-5 items-center">
+            {/* Challenger Score */}
+            <div className="text-center md:text-left space-y-1">
+              <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider">
+                {activeChallengeData.challengerName} (Team: {activeChallengeData.challengerTeamName})
+              </span>
+              <div className="flex justify-center md:justify-start items-baseline gap-1.5">
+                <span className="font-display font-black text-3xl text-slate-100">
+                  {activeChallengeData.p1Score}
+                </span>
+                <span className="text-xs text-slate-400 font-mono">runs</span>
+              </div>
+            </div>
+
+            {/* Target Display */}
+            <div className="bg-slate-900/60 p-4 border border-slate-800 rounded-2xl text-center space-y-1">
+              {activeChallengeData.currentInnings === 2 ? (
+                <>
+                  <span className="text-[10px] font-mono font-bold text-orange-400 uppercase tracking-wider block">
+                    Runs Needed to Win
+                  </span>
+                  <p className="font-display font-black text-2xl text-slate-100 leading-none">
+                    {Math.max(0, targetScore! - batsmanScore)}
+                  </p>
+                  <span className="text-[10px] text-slate-500 font-medium block">
+                    Target: {targetScore} runs
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-[10px] font-mono font-bold text-purple-400 uppercase tracking-wider block">
+                    Current Innings
+                  </span>
+                  <p className="font-display font-black text-xl text-slate-300 leading-none">
+                    Setting Target
+                  </p>
+                </>
+              )}
+            </div>
+
+            {/* Target Score */}
+            <div className="text-center md:text-right space-y-1">
+              <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider">
+                {activeChallengeData.targetName} (Team: {activeChallengeData.targetTeamName})
+              </span>
+              <div className="flex justify-center md:justify-end items-baseline gap-1.5">
+                <span className="font-display font-black text-3xl text-slate-100">
+                  {activeChallengeData.p2Score}
+                </span>
+                <span className="text-xs text-slate-400 font-mono">runs</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* The Pitch (Visual Action Area) */}
+        <div className="relative bg-gradient-to-b from-[#121824] to-[#1A2238] rounded-3xl p-6 md:p-8 border border-slate-700 shadow-xl min-h-[320px] flex flex-col justify-between overflow-hidden">
+          <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[2px] bg-slate-800/50" />
+          <div className="absolute left-1/2 top-0 bottom-0 w-[2px] bg-slate-800/50 -translate-x-1/2 border-dashed border-r border-slate-700/30" />
+          
+          <div className="relative z-10 grid grid-cols-1 md:grid-cols-7 items-center gap-6 py-4">
+            {/* Bowler Card */}
+            <div className={`md:col-span-3 flex flex-col items-center p-6 rounded-2xl border transition-all ${
+              !isMyBattingNow 
+                ? 'bg-purple-950/15 border-purple-500/40 shadow-[0_0_20px_rgba(168,85,247,0.12)]' 
+                : 'bg-[#161D2F]/80 border-slate-700/60'
+            }`}>
+              <span className="bg-purple-500/20 text-purple-300 border border-purple-500/30 px-3.5 py-1 rounded-full text-[10px] font-mono font-bold tracking-widest uppercase flex items-center gap-1.5 mb-3">
+                🥎 BOWLING
+              </span>
+              
+              <h4 className="font-display font-black text-xl text-slate-100 uppercase tracking-tight">
+                {bowlerName}
+              </h4>
+              <p className="text-[10px] font-mono text-slate-400 mb-4 font-bold tracking-wider">
+                {!isMyBattingNow ? '👤 (YOU)' : '🛡️ (OPPONENT)'}
+              </p>
+
+              <div className={`w-24 h-24 md:w-28 md:h-28 rounded-full flex items-center justify-center text-4xl shadow-lg border-4 transition-all duration-300 ${
+                displayBowlerMove 
+                  ? 'bg-purple-500/15 border-purple-500/40 scale-105' 
+                  : 'bg-slate-800/50 border-slate-700'
+              }`}>
+                {displayBowlerMove ? handGestures[displayBowlerMove]?.icon : (
+                  (!isMyBattingNow && isMyTurnSubmitted) ? '✔️' : (isMyBattingNow && activeChallengeData.p2MoveSubmitted && myPlayerRole === 'p1') || (isMyBattingNow && activeChallengeData.p1MoveSubmitted && myPlayerRole === 'p2') ? '⚡' : '❓'
+                )}
+              </div>
+
+              <span className="text-xs font-mono font-bold text-purple-300 mt-4 h-5">
+                {displayBowlerMove ? `Played Gesture ${displayBowlerMove}` : (
+                  (!isMyBattingNow && isMyTurnSubmitted) ? 'Locked in!' : 'Bowl first...'
+                )}
+              </span>
+            </div>
+
+            {/* Central Countdown */}
+            <div className="md:col-span-1 flex flex-col items-center justify-center py-4 md:py-0">
+              <motion.div 
+                key={multiplayerTurnSeconds}
+                initial={{ scale: 0.8 }}
+                animate={{ scale: 1 }}
+                className={`w-16 h-16 rounded-full border-2 flex flex-col items-center justify-center font-display font-black text-white select-none shadow-xl transition-all duration-300 ${
+                  multiplayerTurnSeconds <= 4 
+                    ? 'bg-red-600 border-red-400 animate-pulse' 
+                    : 'bg-slate-900 border-slate-700'
+                }`}
+              >
+                <span className="text-[9px] font-mono text-slate-400 uppercase leading-none font-bold font-bold">Turn</span>
+                <span className="text-xl leading-none pt-0.5">{multiplayerTurnSeconds}s</span>
+              </motion.div>
+              <span className="text-[10px] font-mono font-bold text-slate-500 mt-2 uppercase tracking-wide">
+                Time Limit
+              </span>
+            </div>
+
+            {/* Batter Card */}
+            <div className={`md:col-span-3 flex flex-col items-center p-6 rounded-2xl border transition-all ${
+              isMyBattingNow 
+                ? 'bg-orange-950/15 border-orange-500/40 shadow-[0_0_20px_rgba(249,115,22,0.12)]' 
+                : 'bg-[#161D2F]/80 border-slate-700/60'
+            }`}>
+              <span className="bg-orange-500/20 text-orange-300 border border-orange-500/30 px-3.5 py-1 rounded-full text-[10px] font-mono font-bold tracking-widest uppercase flex items-center gap-1.5 mb-3">
+                🏏 BATTING
+              </span>
+
+              <h4 className="font-display font-black text-xl text-slate-100 uppercase tracking-tight">
+                {batsmanName}
+              </h4>
+              <p className="text-[10px] font-mono text-slate-400 mb-4 font-bold tracking-wider">
+                {isMyBattingNow ? '👤 (YOU)' : '🛡️ (OPPONENT)'}
+              </p>
+
+              <div className={`w-24 h-24 md:w-28 md:h-28 rounded-full flex items-center justify-center text-4xl shadow-lg border-4 transition-all duration-300 ${
+                displayBatsmanMove 
+                  ? 'bg-orange-500/15 border-orange-500/40 scale-105' 
+                  : 'bg-slate-800/50 border-slate-700'
+              }`}>
+                {displayBatsmanMove ? handGestures[displayBatsmanMove]?.icon : (
+                  (isMyBattingNow && isMyTurnSubmitted) ? '✔️' : (!isMyBattingNow && activeChallengeData.p1MoveSubmitted && myPlayerRole === 'p2') || (!isMyBattingNow && activeChallengeData.p2MoveSubmitted && myPlayerRole === 'p1') ? '⚡' : '👋'
+                )}
+              </div>
+
+              <span className="text-xs font-mono font-bold text-orange-300 mt-4 h-5">
+                {displayBatsmanMove ? `Played Gesture ${displayBatsmanMove}` : (
+                  (isMyBattingNow && isMyTurnSubmitted) ? 'Locked in!' : 'Bat first...'
+                )}
+              </span>
+            </div>
+          </div>
+
+          {/* Commentary Overlay */}
+          <div className="relative z-10 bg-[#1A2238]/95 backdrop-blur-md px-6 py-3 rounded-full border border-slate-700 text-center max-w-md mx-auto shadow-2xl mt-4">
+            <p className="font-sans text-xs md:text-sm italic font-bold text-orange-400">
+              {activeChallengeData.commentary}
+            </p>
+          </div>
+        </div>
+
+        {/* Gesture Controller */}
+        <div className="space-y-3">
+          <p className="text-center text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider">
+            {isMyTurnSubmitted ? 'WAITING FOR OPPONENT...' : 'SELECT YOUR GESTURE'}
+          </p>
+
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            {[1, 2, 3, 4, 5, 6].map((num) => {
+              const gesture = handGestures[num];
+              const isSelected = mySubmittedMove === num;
+              return (
+                <button
+                  key={num}
+                  disabled={isMyTurnSubmitted}
+                  onClick={() => submitMultiplayerMove(num)}
+                  className={`relative p-4 md:p-5 border-2 rounded-2xl flex flex-col items-center justify-center gap-1.5 transition-all duration-100 ${
+                    isMyTurnSubmitted
+                      ? isSelected
+                        ? 'bg-orange-500/20 border-orange-500/50 text-orange-400 cursor-not-allowed'
+                        : 'bg-slate-900/40 border-slate-900 text-slate-600 cursor-not-allowed opacity-40'
+                      : 'bg-[#161D2F] text-slate-200 border-slate-800 hover:scale-105 active:scale-95 cursor-pointer hover:border-orange-500/50 hover:bg-orange-500/5'
+                  }`}
+                >
+                  <span className="text-3xl md:text-4xl">{gesture.icon}</span>
+                  <span className="text-[10px] font-mono font-black uppercase tracking-wider">{gesture.label}</span>
+                  <div className="absolute top-1.5 right-2 w-4 h-4 rounded-full bg-slate-900/80 border border-slate-700 flex items-center justify-center font-display font-black text-[9px] text-slate-300">
+                    {num}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div id="digital-game-arena" className="max-w-5xl mx-auto space-y-6 pb-12">
+      {activeChallengeId && activeChallengeData ? (
+        renderMultiplayerArena()
+      ) : (
+        <>
       
       {/* 3, 2, 1 Countdown Overlay */}
       <AnimatePresence>
@@ -484,6 +1149,86 @@ export default function DigitalGameSection({ userProfile, playerTeamName, onGame
                 <Zap className="w-4 h-4 animate-bounce" /> Get Ready to Bat & Bowl!
               </div>
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Sending Challenge Overlay */}
+      <AnimatePresence>
+        {sendingChallenge && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#0F1423]/95 backdrop-blur-md p-6"
+          >
+            <div className="max-w-md w-full bg-[#161D2F] border border-orange-500/30 rounded-2xl p-6 text-center space-y-6 shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-orange-500 to-red-500" />
+              <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/20 rounded-full flex items-center justify-center mx-auto text-orange-400">
+                <RefreshCw className="w-8 h-8 animate-spin" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-display font-black text-xl text-slate-100 uppercase tracking-tight">
+                  Sending Live Challenge
+                </h3>
+                <p className="text-sm text-slate-400">
+                  {challengeStatusMessage}
+                </p>
+              </div>
+
+              {challengeTimeout !== null && (
+                <div className="p-4 bg-slate-900/60 rounded-xl border border-slate-800">
+                  <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-wider block">
+                    Waiting for Response
+                  </span>
+                  <span className="font-display font-black text-3xl text-orange-400">
+                    {challengeTimeout}s
+                  </span>
+                </div>
+              )}
+
+              <button
+                onClick={async () => {
+                  setSendingChallenge(false);
+                  setChallengeTimeout(null);
+                }}
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-300 font-display font-black text-xs uppercase rounded-xl transition-all cursor-pointer"
+              >
+                Cancel Challenge
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Challenge Error Overlay */}
+      <AnimatePresence>
+        {challengeError && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/80 p-6 backdrop-blur-sm"
+          >
+            <div className="max-w-md w-full bg-[#161D2F] border border-red-500/30 rounded-2xl p-6 text-center space-y-6 shadow-2xl">
+              <div className="w-12 h-12 bg-red-500/10 border border-red-500/20 rounded-full flex items-center justify-center mx-auto text-red-400">
+                <span className="text-xl">⚠️</span>
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-display font-black text-lg text-slate-100 uppercase">
+                  Challenge Request Notice
+                </h3>
+                <p className="text-sm text-slate-400 leading-relaxed">
+                  {challengeError}
+                </p>
+              </div>
+              <button
+                onClick={() => setChallengeError(null)}
+                className="w-full py-3 bg-red-500 hover:bg-red-600 text-white font-display font-black text-xs uppercase rounded-xl shadow-lg transition-all cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -591,24 +1336,45 @@ export default function DigitalGameSection({ userProfile, playerTeamName, onGame
                     No other registered teams found yet. Encourage other players to register their team names to compete against them!
                   </div>
                 ) : (
-                  <div className="relative">
-                    <select
-                      value={selectedOpponent?.id || ''}
-                      onChange={(e) => {
-                        const opp = registeredPlayers.find(p => p.id === e.target.value);
-                        if (opp) setSelectedOpponent(opp);
-                      }}
-                      className="w-full bg-[#1A2238] border border-slate-700 text-slate-200 py-3.5 px-4 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500/50 appearance-none cursor-pointer"
-                    >
-                      {registeredPlayers.map((player) => (
-                        <option key={player.id} value={player.id}>
-                          {player.name} ({player.teamName})
-                        </option>
-                      ))}
-                    </select>
-                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
-                      ▼
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <select
+                        value={selectedOpponent?.id || ''}
+                        onChange={(e) => {
+                          const opp = registeredPlayers.find(p => p.id === e.target.value);
+                          if (opp) setSelectedOpponent(opp);
+                        }}
+                        className="w-full bg-[#1A2238] border border-slate-700 text-slate-200 py-3.5 px-4 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500/50 appearance-none cursor-pointer"
+                      >
+                        {registeredPlayers.map((player) => {
+                          const online = isPlayerOnline(player.lastActive);
+                          return (
+                            <option key={player.id} value={player.id}>
+                              {player.name} ({player.teamName}) {online ? '● ONLINE' : '(Offline)'}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                        ▼
+                      </div>
                     </div>
+
+                    {selectedOpponent && (
+                      <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl text-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 font-mono">
+                        <span className="text-slate-400">Opponent Availability:</span>
+                        {isPlayerOnline(selectedOpponent.lastActive) ? (
+                          <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                            <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+                            ● Online & Ready to Play
+                          </span>
+                        ) : (
+                          <span className="text-rose-400 font-bold flex items-center gap-1">
+                            ● Offline (Wait for them to open the app)
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1084,6 +1850,8 @@ export default function DigitalGameSection({ userProfile, playerTeamName, onGame
           </div>
         </div>
       )}
+        </>
+      )}
     </div>
   );
 }
@@ -1091,5 +1859,7 @@ export default function DigitalGameSection({ userProfile, playerTeamName, onGame
 interface DigitalGameProps {
   userProfile: UserProfile | null;
   playerTeamName?: string | null;
+  activeChallengeId?: string | null;
+  setActiveChallengeId?: (id: string | null) => void;
   onGameSaved: () => void;
 }

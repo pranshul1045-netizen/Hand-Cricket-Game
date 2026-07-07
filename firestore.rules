@@ -140,6 +140,11 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    match /gameChallenges/{challengeId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     match /leagueUpdates/{updateId} {
       allow read: if true;
       allow create: if isValidId(updateId) && isValidLeagueUpdate(request.resource.data) && request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 50;

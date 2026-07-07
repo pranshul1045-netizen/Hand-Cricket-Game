@@ -117,6 +117,36 @@
         "schoolyardLocked": { "type": "boolean" }
       },
       "required": []
+    },
+    "GameChallenge": {
+      "title": "GameChallenge",
+      "description": "Real-time game challenge request and active multiplayer game state between players",
+      "type": "object",
+      "properties": {
+        "challengerId": { "type": "string" },
+        "challengerName": { "type": "string" },
+        "challengerTeamName": { "type": "string" },
+        "targetId": { "type": "string" },
+        "targetName": { "type": "string" },
+        "targetTeamName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined", "timeout", "completed", "cancelled"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "tossWinner": { "type": "string" },
+        "tossChoice": { "type": "string" },
+        "p1Score": { "type": "integer" },
+        "p2Score": { "type": "integer" },
+        "currentInnings": { "type": "integer" },
+        "currentTurn": { "type": "integer" },
+        "p1LastMove": { "type": "integer" },
+        "p2LastMove": { "type": "integer" },
+        "p1MoveSubmitted": { "type": "boolean" },
+        "p2MoveSubmitted": { "type": "boolean" },
+        "gameEnded": { "type": "boolean" },
+        "commentary": { "type": "string" },
+        "lastTurnTime": { "type": "string" }
+      },
+      "required": ["challengerId", "challengerName", "targetId", "status", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -151,6 +181,10 @@
     "/settings/{settingsId}": {
       "schema": "Settings",
       "description": "Global settings for tournaments"
+    },
+    "/gameChallenges/{challengeId}": {
+      "schema": "GameChallenge",
+      "description": "Real-time game invitation and match state"
     }
   }
 }

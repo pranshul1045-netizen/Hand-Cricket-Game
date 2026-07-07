@@ -9,7 +9,7 @@ import {
   GoogleAuthProvider, signOut 
 } from 'firebase/auth';
 import { 
-  doc, onSnapshot, setDoc, getDoc, collection, query, orderBy 
+  doc, onSnapshot, setDoc, getDoc, collection, query, orderBy, where 
 } from 'firebase/firestore';
 import { UserProfile, SchoolMatch } from './types';
 
@@ -150,6 +150,10 @@ export default function App() {
   const [isSavingTeam, setIsSavingTeam] = useState(false);
   const [teamError, setTeamError] = useState('');
 
+  // Real-time Multiplayer states
+  const [activeChallengeId, setActiveChallengeId] = useState<string | null>(null);
+  const [incomingChallenge, setIncomingChallenge] = useState<any>(null);
+
   // Is super admin check
   const isAdmin = 
     user?.email === 'pranshul1045@gmail.com' || 
@@ -278,6 +282,77 @@ export default function App() {
     });
     return () => unsub();
   }, [isPlayerLogin, playerDocId]);
+
+  // Online Presence Heartbeat
+  useEffect(() => {
+    if (!isPlayerLogin || !playerDocId) return;
+    const updatePresence = async () => {
+      try {
+        const docRef = doc(db, 'playerProfiles', playerDocId);
+        await setDoc(docRef, {
+          lastActive: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.error("Error updating presence:", err);
+      }
+    };
+    updatePresence();
+    const interval = setInterval(updatePresence, 10000);
+    return () => clearInterval(interval);
+  }, [isPlayerLogin, playerDocId]);
+
+  // Listen to Incoming Game Challenges
+  useEffect(() => {
+    if (!isPlayerLogin || !playerDocId) {
+      setIncomingChallenge(null);
+      return;
+    }
+    const challengesQuery = query(
+      collection(db, 'gameChallenges'),
+      where('targetId', '==', playerDocId),
+      where('status', '==', 'pending')
+    );
+    const unsub = onSnapshot(challengesQuery, (snapshot) => {
+      if (!snapshot.empty) {
+        const firstDoc = snapshot.docs[0];
+        setIncomingChallenge({ id: firstDoc.id, ...firstDoc.data() });
+      } else {
+        setIncomingChallenge(null);
+      }
+    }, (error) => {
+      console.error("Error listening to challenges:", error);
+    });
+    return () => unsub();
+  }, [isPlayerLogin, playerDocId]);
+
+  const handleAcceptChallenge = async (challengeId: string) => {
+    try {
+      const docRef = doc(db, 'gameChallenges', challengeId);
+      await setDoc(docRef, {
+        status: 'accepted',
+        updatedAt: new Date().toISOString(),
+        lastTurnTime: new Date().toISOString()
+      }, { merge: true });
+      setIncomingChallenge(null);
+      setActiveChallengeId(challengeId);
+      setActiveTab('game');
+    } catch (err) {
+      console.error("Error accepting challenge:", err);
+    }
+  };
+
+  const handleDeclineChallenge = async (challengeId: string) => {
+    try {
+      const docRef = doc(db, 'gameChallenges', challengeId);
+      await setDoc(docRef, {
+        status: 'declined',
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      setIncomingChallenge(null);
+    } catch (err) {
+      console.error("Error declining challenge:", err);
+    }
+  };
 
   const handleSaveTeamName = async (nameInput: string) => {
     if (!nameInput.trim() || !playerDocId) return;
@@ -882,6 +957,8 @@ export default function App() {
                 <DigitalGameSection 
                   userProfile={userProfile} 
                   playerTeamName={playerTeamName}
+                  activeChallengeId={activeChallengeId}
+                  setActiveChallengeId={setActiveChallengeId}
                   onGameSaved={() => {
                     // trigger points re-sync if desired
                   }} 
@@ -1020,6 +1097,49 @@ export default function App() {
             </>
           )}
         </nav>
+      )}
+
+      {/* Real-time Game Challenge Notification Modal */}
+      {incomingChallenge && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-[#0F172A] border border-orange-500/40 rounded-2xl max-w-md w-full p-6 text-center space-y-6 shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-orange-500 to-red-500" />
+            
+            <div className="w-16 h-16 bg-orange-500/10 border border-orange-500/30 rounded-full flex items-center justify-center mx-auto text-orange-400">
+              <Gamepad2 className="w-8 h-8 animate-pulse" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="font-display font-black text-2xl text-slate-100 tracking-tight uppercase">
+                ⚔️ LIVE CHALLENGE RECEIVED!
+              </h3>
+              <p className="text-sm text-slate-400">
+                You have been challenged to an online real-time Hand Cricket duel!
+              </p>
+            </div>
+
+            <div className="bg-slate-900/60 p-4 border border-slate-800 rounded-xl space-y-1">
+              <p className="text-xs font-mono font-bold text-orange-400 uppercase tracking-wider">Opponent</p>
+              <h4 className="text-lg font-black text-slate-200">{incomingChallenge.challengerName}</h4>
+              <p className="text-xs font-semibold text-slate-500">🛡️ Team: {incomingChallenge.challengerTeamName || 'Unnamed'}</p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                onClick={() => handleDeclineChallenge(incomingChallenge.id)}
+                className="py-3 bg-slate-800 hover:bg-slate-700/80 border border-slate-700 text-slate-300 font-display font-black text-sm uppercase rounded-xl transition-all cursor-pointer"
+              >
+                Decline
+              </button>
+              <button
+                onClick={() => handleAcceptChallenge(incomingChallenge.id)}
+                className="py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-black text-sm uppercase rounded-xl shadow-lg hover:shadow-orange-500/20 active:translate-y-0.5 transition-all cursor-pointer animate-bounce"
+              >
+                Accept & Play!
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
