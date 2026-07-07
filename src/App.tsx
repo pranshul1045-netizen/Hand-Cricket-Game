@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Trophy, Gamepad2, BookOpen, Sparkles, LogIn, LogOut, 
-  User, Loader2, Calendar, ShieldAlert, CheckCircle2, Megaphone
+  User, Loader2, Calendar, ShieldAlert, CheckCircle2, Megaphone, Lock
 } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { 
@@ -130,6 +130,7 @@ export default function App() {
   });
 
   const [schoolMatches, setSchoolMatches] = useState<SchoolMatch[]>([]);
+  const [schoolyardLocked, setSchoolyardLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'league' | 'rules' | 'updates' | 'digital_home' | 'digital_league'>('dashboard');
   const [tournamentType, setTournamentType] = useState<'schoolyard' | 'digital' | 'registration'>('schoolyard');
@@ -231,6 +232,18 @@ export default function App() {
     });
 
     return () => unsubMatches();
+  }, []);
+
+  // Synchronize schoolyard tournament lock state in real-time
+  useEffect(() => {
+    const unsubLock = onSnapshot(doc(db, 'settings', 'tournament'), (docSnap) => {
+      if (docSnap.exists()) {
+        setSchoolyardLocked(docSnap.data().schoolyardLocked || false);
+      }
+    }, (err) => {
+      console.error("Failed to load settings: ", err);
+    });
+    return () => unsubLock();
   }, []);
 
   const handleGoogleLogin = async () => {
@@ -621,10 +634,12 @@ export default function App() {
             </button>
           </div>
           
-          <div className="text-[10px] font-mono font-bold text-slate-400 flex items-center gap-1.5 self-end sm:self-auto bg-[#1A2238]/60 px-3 py-1.5 rounded-lg border border-slate-700/40">
-            {tournamentType === 'schoolyard' && <span>🏆 Active schoolyard points table & matches</span>}
-            {tournamentType === 'digital' && <span>⚡ Play hand-cricket vs Computer</span>}
-            {tournamentType === 'registration' && <span>✍️ Sign up for the Digital Tournament</span>}
+          <div className="flex flex-wrap items-center gap-3 self-end sm:self-auto">
+            <div className="text-[10px] font-mono font-bold text-slate-400 flex items-center gap-1.5 bg-[#1A2238]/60 px-3 py-1.5 rounded-lg border border-slate-700/40">
+              {tournamentType === 'schoolyard' && <span>🏆 Active schoolyard points table & matches</span>}
+              {tournamentType === 'digital' && <span>⚡ Play hand-cricket vs Computer</span>}
+              {tournamentType === 'registration' && <span>✍️ Sign up for the Digital Tournament</span>}
+            </div>
           </div>
         </div>
       </div>
@@ -632,39 +647,76 @@ export default function App() {
       {/* Main Container Viewport */}
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-6">
         {tournamentType === 'registration' ? (
-          <RegistrationSection userProfile={userProfile} isAdmin={isAdmin} />
+          <RegistrationSection userProfile={userProfile} isAdmin={isAdmin} schoolyardLocked={schoolyardLocked} />
         ) : tournamentType === 'schoolyard' ? (
-          <>
-            {activeTab === 'dashboard' && (
-              <DashboardSection 
-                userProfile={userProfile} 
-                schoolMatches={schoolMatches} 
-                onStartGame={() => {
-                  setTournamentType('digital');
-                  setActiveTab('game');
-                }}
-                onUpdateProfile={handleUpdateLocalProfile}
-              />
-            )}
-            {activeTab === 'league' && (
-              <LeagueMatchesSection 
-                userProfile={userProfile} 
-                schoolMatches={schoolMatches}
-                isAdmin={isAdmin}
-                onAddMatch={handleAddLocalMatch}
-                onDeleteMatch={handleDeleteLocalMatch}
-              />
-            )}
-            {activeTab === 'updates' && (
-              <UpdatesSection 
-                userProfile={userProfile}
-                isAdmin={isAdmin}
-              />
-            )}
-            {activeTab === 'rules' && (
-              <RulesSection />
-            )}
-          </>
+          schoolyardLocked ? (
+            <div className="max-w-xl mx-auto my-12 bg-[#161D2F] border-2 border-red-500/30 rounded-3xl p-8 md:p-12 shadow-2xl text-center space-y-8 relative overflow-hidden animate-in fade-in zoom-in-95 duration-300">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/5 rounded-full blur-3xl transform translate-x-20 -translate-y-20"></div>
+              
+              <div className="w-20 h-20 bg-red-500/10 border-2 border-red-500/30 rounded-full flex items-center justify-center mx-auto text-red-400 shadow-lg">
+                <Lock className="w-10 h-10" />
+              </div>
+
+              <div className="space-y-4">
+                <h2 className="font-display font-black text-3xl text-white uppercase tracking-tight leading-tight">
+                  Schoolyard Tournament Locked
+                </h2>
+                <div className="inline-block bg-red-500/20 border border-red-500/40 text-red-400 font-mono text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">
+                  LOCKED BY ADMIN
+                </div>
+              </div>
+
+              <div className="h-px bg-gradient-to-r from-transparent via-slate-700 to-transparent"></div>
+
+              <div className="space-y-6 text-slate-300">
+                <p className="font-display font-bold text-xl text-orange-400 uppercase tracking-wide">
+                  tournament finished
+                </p>
+                <div className="space-y-4">
+                  <p className="font-display font-black text-lg text-white uppercase tracking-tight">
+                    focus on digital tournament
+                  </p>
+                  <p className="text-orange-500/90 font-mono text-xs font-semibold bg-[#1A2238] border border-slate-700/50 rounded-xl px-5 py-3.5 inline-block">
+                    📅 starting on next monday( 19 july 2026)
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {activeTab === 'dashboard' && (
+                <DashboardSection 
+                  userProfile={userProfile} 
+                  schoolMatches={schoolMatches} 
+                  schoolyardLocked={schoolyardLocked}
+                  onStartGame={() => {
+                    setTournamentType('digital');
+                    setActiveTab('game');
+                  }}
+                  onUpdateProfile={handleUpdateLocalProfile}
+                />
+              )}
+              {activeTab === 'league' && (
+                <LeagueMatchesSection 
+                  userProfile={userProfile} 
+                  schoolMatches={schoolMatches}
+                  isAdmin={isAdmin}
+                  schoolyardLocked={schoolyardLocked}
+                  onAddMatch={handleAddLocalMatch}
+                  onDeleteMatch={handleDeleteLocalMatch}
+                />
+              )}
+              {activeTab === 'updates' && (
+                <UpdatesSection 
+                  userProfile={userProfile}
+                  isAdmin={isAdmin}
+                />
+              )}
+              {activeTab === 'rules' && (
+                <RulesSection />
+              )}
+            </>
+          )
         ) : (
           /* DIGITAL TOURNAMENT MODES */
           <>
@@ -696,7 +748,7 @@ export default function App() {
       </main>
 
       {/* Responsive Floating Bottom Navigation Bar */}
-      {tournamentType !== 'registration' && (
+      {tournamentType !== 'registration' && !(tournamentType === 'schoolyard' && schoolyardLocked) && (
         <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#1A2238]/95 backdrop-blur-md border-t border-slate-700 shadow-lg px-4 py-2.5 flex justify-around md:justify-center md:gap-8 items-center max-w-lg md:max-w-none mx-auto md:rounded-full md:bottom-4 md:border">
           {tournamentType === 'schoolyard' ? (
             <>

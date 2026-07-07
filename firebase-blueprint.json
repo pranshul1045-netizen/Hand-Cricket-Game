@@ -108,6 +108,15 @@
         "registeredBy": { "type": "string" }
       },
       "required": ["id", "name", "classSec", "school", "whatsapp", "createdAt", "registeredBy"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global app-wide settings and states controlled by admins",
+      "type": "object",
+      "properties": {
+        "schoolyardLocked": { "type": "boolean" }
+      },
+      "required": []
     }
   },
   "firestore": {
@@ -138,6 +147,10 @@
     "/registrations/{registrationId}": {
       "schema": "Registration",
       "description": "Tournament registration submissions"
+    },
+    "/settings/{settingsId}": {
+      "schema": "Settings",
+      "description": "Global settings for tournaments"
     }
   }
 }

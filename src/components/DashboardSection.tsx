@@ -37,9 +37,10 @@ interface DashboardSectionProps {
   schoolMatches: SchoolMatch[];
   onStartGame: () => void;
   onUpdateProfile?: (updatedProfile: UserProfile) => void;
+  schoolyardLocked?: boolean;
 }
 
-export default function DashboardSection({ userProfile, schoolMatches, onStartGame, onUpdateProfile }: DashboardSectionProps) {
+export default function DashboardSection({ userProfile, schoolMatches, onStartGame, onUpdateProfile, schoolyardLocked }: DashboardSectionProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [battingStyle, setBattingStyle] = useState<'Right-handed' | 'Left-handed'>('Right-handed');
@@ -146,6 +147,11 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
   const handleSavePlayerPhoto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPlayerForPhoto) return;
+    
+    if (schoolyardLocked) {
+      alert("Cannot update player profile/photo: tournament is locked.");
+      return;
+    }
     
     let targetName = selectedPlayerForPhoto;
     if (selectedPlayerForPhoto === 'new_custom') {
@@ -436,6 +442,26 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
         </div>
       </section>
 
+      {schoolyardLocked && (
+        <div className="bg-red-950/20 border border-red-500/30 text-red-400 p-5 rounded-2xl flex items-center gap-4 shadow-lg animate-in slide-in-from-top-3 duration-200">
+          <div className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center flex-shrink-0 text-red-400">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0110 0v4" />
+            </svg>
+          </div>
+          <div>
+            <h4 className="font-display font-black text-sm uppercase tracking-wider text-slate-100 flex items-center gap-1.5">
+              <span>Schoolyard Tournament Locked</span>
+              <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded font-bold font-mono">LOCKED BY ADMIN</span>
+            </h4>
+            <p className="text-xs text-slate-400 font-sans mt-1 max-w-2xl leading-relaxed">
+              The administrator has locked this stage of the Schoolyard Tournament. Scorecard updates, registration modifications, and player directory modifications are frozen. You can still browse standings and view details.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Bands Arena - Orange & Purple Bands */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Orange Band Card */}
@@ -598,9 +624,19 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                         {isAdmin && (
                           <button
                             type="button"
-                            onClick={() => handleStartEditPhoto(standing.name)}
-                            className="p-1 hover:bg-slate-700/50 rounded-md text-slate-400 hover:text-orange-400 transition-colors cursor-pointer"
-                            title="Set Profile Photo"
+                            onClick={() => {
+                              if (schoolyardLocked) {
+                                alert("Cannot edit profile: tournament is locked.");
+                                return;
+                              }
+                              handleStartEditPhoto(standing.name);
+                            }}
+                            className={`p-1 rounded-md transition-colors ${
+                              schoolyardLocked
+                                ? 'opacity-30 cursor-not-allowed text-slate-600'
+                                : 'hover:bg-slate-700/50 text-slate-400 hover:text-orange-400 cursor-pointer'
+                            }`}
+                            title={schoolyardLocked ? "Tournament Locked" : "Set Profile Photo"}
                           >
                             <Edit3 className="w-3 h-3" />
                           </button>
@@ -1131,15 +1167,29 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                                 </div>
                                 <button
                                   type="button"
-                                  onClick={() => handleStartEditPhoto(profile.name)}
-                                  className="p-1.5 text-slate-400 hover:text-orange-400 hover:bg-slate-800 rounded transition-colors cursor-pointer"
-                                  title="Edit Profile"
+                                  onClick={() => {
+                                    if (schoolyardLocked) {
+                                      alert("Cannot edit profile: tournament is locked.");
+                                      return;
+                                    }
+                                    handleStartEditPhoto(profile.name);
+                                  }}
+                                  className={`p-1.5 rounded transition-colors ${
+                                    schoolyardLocked
+                                      ? 'opacity-30 cursor-not-allowed text-slate-600'
+                                      : 'text-slate-400 hover:text-orange-400 hover:bg-slate-800 cursor-pointer'
+                                  }`}
+                                  title={schoolyardLocked ? "Tournament Locked" : "Edit Profile"}
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>
                                 <button
                                   type="button"
                                   onClick={async () => {
+                                    if (schoolyardLocked) {
+                                      alert("Cannot reset password: tournament is locked.");
+                                      return;
+                                    }
                                     if (window.confirm(`Are you sure you want to reset the password for ${profile.name} to 'password'?`)) {
                                       try {
                                         await setDoc(doc(db, 'playerProfiles', docId), {
@@ -1153,8 +1203,12 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                                       }
                                     }
                                   }}
-                                  className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded transition-colors cursor-pointer"
-                                  title="Reset Password to 'password'"
+                                  className={`p-1.5 rounded transition-colors ${
+                                    schoolyardLocked
+                                      ? 'opacity-30 cursor-not-allowed text-slate-600'
+                                      : 'text-slate-400 hover:text-red-400 hover:bg-slate-800 cursor-pointer'
+                                  }`}
+                                  title={schoolyardLocked ? "Tournament Locked" : "Reset Password to 'password'"}
                                 >
                                   <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 15h-1.562a6 6 0 10-11.83 0H4.21" />

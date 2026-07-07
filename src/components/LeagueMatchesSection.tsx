@@ -25,11 +25,12 @@ interface LeagueMatchesSectionProps {
   userProfile: UserProfile | null;
   schoolMatches: SchoolMatch[];
   isAdmin: boolean;
+  schoolyardLocked?: boolean;
   onAddMatch?: (newMatch: SchoolMatch) => void;
   onDeleteMatch?: (matchId: string) => void;
 }
 
-export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdmin, onAddMatch, onDeleteMatch }: LeagueMatchesSectionProps) {
+export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdmin, schoolyardLocked, onAddMatch, onDeleteMatch }: LeagueMatchesSectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -92,6 +93,11 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
     };
 
     try {
+      if (schoolyardLocked) {
+        console.error("Cannot add scorecard: tournament is locked.");
+        setIsSaving(false);
+        return;
+      }
       const isUserAdmin = isAdmin || userProfile?.role === 'admin' || userProfile?.uid === 'admin_local';
       if (isUserAdmin) {
         await setDoc(doc(db, 'schoolMatches', matchId), newMatchPayload);
@@ -118,6 +124,10 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
 
   const handleDeleteMatch = async (matchId: string) => {
     try {
+      if (schoolyardLocked) {
+        console.error("Cannot delete scorecard: tournament is locked.");
+        return;
+      }
       const isUserAdmin = isAdmin || userProfile?.role === 'admin' || userProfile?.uid === 'admin_local';
       if (isUserAdmin) {
         await deleteDoc(doc(db, 'schoolMatches', matchId));
@@ -141,6 +151,21 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
   return (
     <div id="league-matches-section" className="space-y-6">
       
+      {schoolyardLocked && (
+        <div className="bg-red-950/20 border border-red-500/30 text-red-400 p-4 rounded-xl flex items-center gap-3.5 shadow">
+          <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 text-red-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>
+          <div className="text-xs">
+            <span className="font-bold text-slate-200 block">Schoolyard Match Entry Frozen</span>
+            <span className="text-slate-400 font-sans mt-0.5 block">
+              New scorecards are locked for the current stage. Even administrators cannot make changes at this time.
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Header and Add Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="space-y-1">
@@ -152,7 +177,7 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
           </p>
         </div>
 
-        {isAdmin && (
+        {isAdmin && !schoolyardLocked && (
           <button
             onClick={() => setShowAddForm(!showAddForm)}
             className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-black text-xs uppercase px-5 py-3 rounded-xl flex items-center justify-center gap-1.5 shadow-[0_3px_0_0_#9a3412] active:translate-y-0.5 active:shadow-none transition-all duration-100 cursor-pointer"
@@ -358,7 +383,7 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
                 }`}>
                   {match.status}
                 </span>
-                {isAdmin && (
+                {isAdmin && !schoolyardLocked && (
                   <div className="flex items-center gap-1.5">
                     {confirmDeleteId === match.id ? (
                       <div className="flex items-center gap-1 animate-in fade-in zoom-in-95 duration-150">

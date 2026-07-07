@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   User, School, BookOpen, Phone, CheckCircle2, CheckCircle, MessageSquare, ExternalLink,
-  Trash2, ShieldAlert, Search, RefreshCw, Sparkles, Loader2 
+  Trash2, ShieldAlert, Search, RefreshCw, Sparkles, Loader2, Lock
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { 
@@ -11,14 +11,16 @@ import {
 interface RegistrationSectionProps {
   userProfile: any;
   isAdmin: boolean;
+  schoolyardLocked?: boolean;
 }
 
-export default function RegistrationSection({ userProfile, isAdmin }: RegistrationSectionProps) {
+export default function RegistrationSection({ userProfile, isAdmin, schoolyardLocked }: RegistrationSectionProps) {
   // Form states
   const [name, setName] = useState('');
   const [classSec, setClassSec] = useState('');
   const [school, setSchool] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
+  const [pin, setPin] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
@@ -58,13 +60,22 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !classSec.trim() || !school.trim() || !whatsapp.trim()) {
+    if (schoolyardLocked) {
+      setError('Registration is currently locked and frozen.');
+      return;
+    }
+    if (!name.trim() || !classSec.trim() || !school.trim() || !whatsapp.trim() || !pin.trim()) {
       setError('Please fill in all fields.');
       return;
     }
 
     if (whatsapp.length < 10) {
       setError('Please enter a valid WhatsApp number (at least 10 digits including country code).');
+      return;
+    }
+
+    if (pin.trim().length < 4) {
+      setError('Please enter a password/PIN of at least 4 characters.');
       return;
     }
 
@@ -79,6 +90,7 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
         classSec: classSec.trim(),
         school: school.trim(),
         whatsapp: whatsapp.trim(),
+        pin: pin.trim(),
         createdAt: new Date().toISOString(),
         registeredBy: userProfile?.displayName || 'Anonymous',
         status: 'pending'
@@ -89,6 +101,7 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
       setClassSec('');
       setSchool('');
       setWhatsapp('');
+      setPin('');
     } catch (err: any) {
       setError('Could not submit registration. Please check your network and try again.');
       handleFirestoreError(err, OperationType.WRITE, `registrations/${regId}`);
@@ -102,10 +115,28 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
   };
 
   const handleConfirmClick = async (reg: any) => {
+    if (schoolyardLocked) {
+      setActionError("Tournament is locked. Cannot confirm registration.");
+      return;
+    }
     try {
       setActionError('');
+      
+      // 1. Create/Update player login profile in 'playerProfiles'
+      const docId = reg.name.toLowerCase();
+      await setDoc(doc(db, 'playerProfiles', docId), {
+        name: reg.name,
+        pin: reg.pin || 'password', // use their registered custom PIN or fallback to 'password'
+        classSec: reg.classSec,
+        school: reg.school,
+        whatsapp: reg.whatsapp,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      // 2. Update status in registrations
       const regRef = doc(db, 'registrations', reg.id);
       await updateDoc(regRef, { status: 'confirmed' });
+
       // Open the message popup
       setSelectedRegForMsg({ ...reg, status: 'confirmed' });
     } catch (err) {
@@ -168,7 +199,19 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
         <div className="bg-[#161D2F] border border-slate-700 rounded-3xl p-6 md:p-8 shadow-2xl relative overflow-hidden max-w-lg mx-auto">
           <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/5 rounded-full blur-2xl transform translate-x-12 -translate-y-12"></div>
           
-          {submitted ? (
+          {schoolyardLocked ? (
+            <div className="text-center space-y-6 py-8 animate-in fade-in duration-300">
+              <div className="w-16 h-16 bg-red-500/10 border-2 border-red-500/30 rounded-full flex items-center justify-center mx-auto text-red-400 shadow-lg">
+                <Lock className="w-8 h-8" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="font-display font-black text-xl text-slate-100 uppercase tracking-tight">Registration Locked</h3>
+                <p className="text-slate-400 text-sm max-w-sm mx-auto font-sans leading-relaxed">
+                  The tournament registration phase has been locked by the administrator. No further entries are allowed for this tournament stage. Keep an eye on updates!
+                </p>
+              </div>
+            </div>
+          ) : submitted ? (
             <div className="text-center space-y-6 py-6 animate-in fade-in duration-300">
               <div className="w-16 h-16 bg-green-500/10 border-2 border-green-500/30 rounded-full flex items-center justify-center mx-auto text-green-400 shadow-lg">
                 <CheckCircle2 className="w-8 h-8" />
@@ -261,6 +304,25 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
                 </p>
               </div>
 
+              {/* Create Password / PIN */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-orange-400" /> Create Login Password / PIN
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={pin}
+                  onChange={(e) => setPin(e.target.value)}
+                  placeholder="Create your custom password or PIN"
+                  maxLength={15}
+                  className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-semibold placeholder:text-slate-500"
+                />
+                <p className="text-[10px] text-slate-500 font-mono">
+                  Minimum 4 characters. Keep this safe! You will use it to log in to the match center.
+                </p>
+              </div>
+
               {/* Submit Button */}
               <button
                 type="submit"
@@ -325,6 +387,7 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
                     <th className="py-3 px-4">School</th>
                     <th className="py-3 px-4">WhatsApp No</th>
                     <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">PIN/Password</th>
                     <th className="py-3 px-4">Date Registered</th>
                     <th className="py-3 px-4 w-24 text-center">Actions</th>
                   </tr>
@@ -358,6 +421,9 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
                           </span>
                         )}
                       </td>
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-400">
+                        {reg.pin || 'password'}
+                      </td>
                       <td className="py-3 px-4 text-slate-400 font-mono text-[11px]">
                         {reg.createdAt ? new Date(reg.createdAt).toLocaleDateString(undefined, {
                           month: 'short',
@@ -370,9 +436,14 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
                         <div className="flex items-center justify-center gap-1.5">
                           {reg.status !== 'confirmed' ? (
                             <button
+                              disabled={schoolyardLocked}
                               onClick={() => handleConfirmClick(reg)}
-                              className="p-1.5 text-slate-400 hover:text-green-400 hover:bg-green-500/10 rounded transition-all cursor-pointer"
-                              title="Confirm Registration"
+                              className={`p-1.5 rounded transition-all ${
+                                schoolyardLocked
+                                  ? 'opacity-30 cursor-not-allowed text-slate-600'
+                                  : 'text-slate-400 hover:text-green-400 hover:bg-green-500/10 cursor-pointer'
+                              }`}
+                              title={schoolyardLocked ? "Tournament Locked" : "Confirm Registration"}
                             >
                               <CheckCircle className="w-4 h-4" />
                             </button>
@@ -386,9 +457,14 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
                             </button>
                           )}
                           <button
+                            disabled={schoolyardLocked}
                             onClick={() => handleDeleteClick(reg)}
-                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-all cursor-pointer"
-                            title="Delete Registration"
+                            className={`p-1.5 rounded transition-all ${
+                              schoolyardLocked
+                                ? 'opacity-30 cursor-not-allowed text-slate-600'
+                                : 'text-slate-500 hover:text-red-400 hover:bg-red-500/10 cursor-pointer'
+                            }`}
+                            title={schoolyardLocked ? "Tournament Locked" : "Delete Registration"}
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -399,7 +475,7 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
 
                   {filteredRegs.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center text-slate-500 text-xs font-mono">
+                      <td colSpan={9} className="py-12 text-center text-slate-500 text-xs font-mono">
                         No matches found. Ensure players fill and submit the registration form.
                       </td>
                     </tr>
@@ -443,7 +519,7 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
                   </div>
                   <button
                     onClick={() => {
-                      const msg = `Hello *${selectedRegForMsg.name}*,\n\nYour registration for the official *HCL Digital Tournament* has been successfully *CONFIRMED*! 🎉🔥\n\n*Details:*\n• Class & Sec: ${selectedRegForMsg.classSec}\n• School: ${selectedRegForMsg.school}\n\nGet ready for the matches! 🎮✨`;
+                      const msg = `Hello *${selectedRegForMsg.name}*,\n\nYour registration for the official *HCL Digital Tournament* has been successfully *CONFIRMED*! 🎉🔥\n\n*Your Login Details:*\n• Username/Name: ${selectedRegForMsg.name}\n• Password/PIN: ${selectedRegForMsg.pin || 'password'}\n\n*Details:*\n• Class & Sec: ${selectedRegForMsg.classSec}\n• School: ${selectedRegForMsg.school}\n\nGet ready for the matches! 🎮✨`;
                       navigator.clipboard.writeText(msg);
                       setCopiedText(true);
                       setTimeout(() => setCopiedText(false), 2000);
@@ -454,7 +530,7 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
                   </button>
                 </div>
                 <div className="text-xs text-slate-300 font-sans whitespace-pre-wrap leading-relaxed">
-                  {`Hello *${selectedRegForMsg.name}*,\n\nYour registration for the official *HCL Digital Tournament* has been successfully *CONFIRMED*! 🎉🔥\n\n*Details:*\n• Class & Sec: ${selectedRegForMsg.classSec}\n• School: ${selectedRegForMsg.school}\n\nGet ready for the matches! 🎮✨`}
+                  {`Hello *${selectedRegForMsg.name}*,\n\nYour registration for the official *HCL Digital Tournament* has been successfully *CONFIRMED*! 🎉🔥\n\n*Your Login Details:*\n• Username/Name: ${selectedRegForMsg.name}\n• Password/PIN: ${selectedRegForMsg.pin || 'password'}\n\n*Details:*\n• Class & Sec: ${selectedRegForMsg.classSec}\n• School: ${selectedRegForMsg.school}\n\nGet ready for the matches! 🎮✨`}
                 </div>
               </div>
             </div>
@@ -462,7 +538,7 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
             <div className="space-y-2">
               <a
                 href={`https://wa.me/${selectedRegForMsg.whatsapp.replace(/[^\d+]/g, '')}?text=${encodeURIComponent(
-                  `Hello *${selectedRegForMsg.name}*,\n\nYour registration for the official *HCL Digital Tournament* has been successfully *CONFIRMED*! 🎉🔥\n\n*Details:*\n• Class & Sec: ${selectedRegForMsg.classSec}\n• School: ${selectedRegForMsg.school}\n\nGet ready for the matches! 🎮✨`
+                  `Hello *${selectedRegForMsg.name}*,\n\nYour registration for the official *HCL Digital Tournament* has been successfully *CONFIRMED*! 🎉🔥\n\n*Your Login Details:*\n• Username/Name: ${selectedRegForMsg.name}\n• Password/PIN: ${selectedRegForMsg.pin || 'password'}\n\n*Details:*\n• Class & Sec: ${selectedRegForMsg.classSec}\n• School: ${selectedRegForMsg.school}\n\nGet ready for the matches! 🎮✨`
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -475,7 +551,7 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
                 <button
                   onClick={() => {
                     const waLink = `https://wa.me/${selectedRegForMsg.whatsapp.replace(/[^\d+]/g, '')}?text=${encodeURIComponent(
-                      `Hello *${selectedRegForMsg.name}*,\n\nYour registration for the official *HCL Digital Tournament* has been successfully *CONFIRMED*! 🎉🔥\n\n*Details:*\n• Class & Sec: ${selectedRegForMsg.classSec}\n• School: ${selectedRegForMsg.school}\n\nGet ready for the matches! 🎮✨`
+                      `Hello *${selectedRegForMsg.name}*,\n\nYour registration for the official *HCL Digital Tournament* has been successfully *CONFIRMED*! 🎉🔥\n\n*Your Login Details:*\n• Username/Name: ${selectedRegForMsg.name}\n• Password/PIN: ${selectedRegForMsg.pin || 'password'}\n\n*Details:*\n• Class & Sec: ${selectedRegForMsg.classSec}\n• School: ${selectedRegForMsg.school}\n\nGet ready for the matches! 🎮✨`
                     )}`;
                     navigator.clipboard.writeText(waLink);
                     setCopiedLink(true);
@@ -532,6 +608,10 @@ export default function RegistrationSection({ userProfile, isAdmin }: Registrati
                 onClick={async () => {
                   const id = regToDelete.id;
                   setRegToDelete(null);
+                  if (schoolyardLocked) {
+                    setActionError("Tournament is locked. Cannot delete registration.");
+                    return;
+                  }
                   try {
                     setActionError('');
                     await deleteDoc(doc(db, 'registrations', id));

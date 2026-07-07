@@ -92,6 +92,14 @@ service cloud.firestore {
         && data.registeredBy is string && data.registeredBy.size() <= 100;
     }
 
+    function isValidSettings(data) {
+      return !('schoolyardLocked' in data) || data.schoolyardLocked is bool;
+    }
+
+    function isSchoolyardLocked() {
+      return get(/databases/$(database)/documents/settings/tournament).data.schoolyardLocked == true;
+    }
+
     // Rules matching collections
     match /users/{userId} {
       allow read: if true;
@@ -107,11 +115,11 @@ service cloud.firestore {
 
     match /schoolMatches/{matchId} {
       allow read: if true;
-      allow create: if isValidId(matchId) && isValidSchoolMatch(request.resource.data) && request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 50;
-      allow update: if isValidSchoolMatch(request.resource.data)
+      allow create: if !isSchoolyardLocked() && isValidId(matchId) && isValidSchoolMatch(request.resource.data) && request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 50;
+      allow update: if !isSchoolyardLocked() && isValidSchoolMatch(request.resource.data)
         && request.resource.data.creatorId == resource.data.creatorId
         && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if true;
+      allow delete: if !isSchoolyardLocked();
     }
 
     match /digitalMatches/{matchId} {
@@ -128,7 +136,7 @@ service cloud.firestore {
 
     match /playerProfiles/{profileId} {
       allow read: if true;
-      allow write: if true;
+      allow write: if !isSchoolyardLocked();
     }
 
     match /leagueUpdates/{updateId} {
@@ -141,7 +149,13 @@ service cloud.firestore {
     }
 
     match /registrations/{registrationId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if !isSchoolyardLocked();
+    }
+
+    match /settings/{settingsId} {
+      allow read: if true;
+      allow write: if isAdmin() && isValidSettings(request.resource.data);
     }
   }
 }
