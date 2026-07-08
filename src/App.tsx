@@ -11,11 +11,13 @@ import {
 import { 
   doc, onSnapshot, setDoc, getDoc, collection, query, orderBy, where 
 } from 'firebase/firestore';
-import { UserProfile, SchoolMatch } from './types';
+import { UserProfile, SchoolMatch, DigitalTournamentMatch } from './types';
 
 // Importing sub-sections
 import DashboardSection from './components/DashboardSection';
 import DigitalGameSection from './components/DigitalGameSection';
+import DigitalHomeSection from './components/DigitalHomeSection';
+import DigitalLeagueSection from './components/DigitalLeagueSection';
 import LeagueMatchesSection from './components/LeagueMatchesSection';
 import RulesSection from './components/RulesSection';
 import UpdatesSection from './components/UpdatesSection';
@@ -130,6 +132,7 @@ export default function App() {
   });
 
   const [schoolMatches, setSchoolMatches] = useState<SchoolMatch[]>([]);
+  const [digitalTournamentMatches, setDigitalTournamentMatches] = useState<DigitalTournamentMatch[]>([]);
   const [schoolyardLocked, setSchoolyardLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'league' | 'rules' | 'updates' | 'digital_home' | 'digital_league'>('dashboard');
@@ -242,7 +245,24 @@ export default function App() {
       handleFirestoreError(error, OperationType.LIST, 'schoolMatches');
     });
 
-    return () => unsubMatches();
+    const dtMatchesQuery = query(
+      collection(db, 'digitalTournamentMatches'),
+      orderBy('createdAt', 'desc')
+    );
+    const unsubDtMatches = onSnapshot(dtMatchesQuery, (snapshot) => {
+      const dtMatchesList: DigitalTournamentMatch[] = [];
+      snapshot.forEach((docSnap) => {
+        dtMatchesList.push({ id: docSnap.id, ...docSnap.data() } as DigitalTournamentMatch);
+      });
+      setDigitalTournamentMatches(dtMatchesList);
+    }, (error) => {
+      console.error("Failed to query digital tournament matches: ", error);
+    });
+
+    return () => {
+      unsubMatches();
+      unsubDtMatches();
+    };
   }, []);
 
   // Synchronize schoolyard tournament lock state in real-time
@@ -743,7 +763,7 @@ export default function App() {
             <button
               onClick={() => {
                 setTournamentType('digital');
-                setActiveTab('game');
+                setActiveTab('digital_home');
               }}
               className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide uppercase transition-all cursor-pointer ${
                 tournamentType === 'digital'
@@ -824,7 +844,7 @@ export default function App() {
                   schoolyardLocked={schoolyardLocked}
                   onStartGame={() => {
                     setTournamentType('digital');
-                    setActiveTab('game');
+                    setActiveTab('digital_home');
                   }}
                   onUpdateProfile={handleUpdateLocalProfile}
                 />
@@ -948,15 +968,13 @@ export default function App() {
           ) : (
             <>
               {activeTab === 'digital_home' && (
-                <LockedTab 
-                  title="Digital Home Screen" 
-                  description="The digital tournament home feed, dynamic brackets, and live stream overlays are currently locked by the administrator until group stages conclude."
-                />
+                <DigitalHomeSection />
               )}
               {activeTab === 'game' && (
                 <DigitalGameSection 
                   userProfile={userProfile} 
                   playerTeamName={playerTeamName}
+                  digitalTournamentMatches={digitalTournamentMatches}
                   activeChallengeId={activeChallengeId}
                   setActiveChallengeId={setActiveChallengeId}
                   onGameSaved={() => {
@@ -965,9 +983,10 @@ export default function App() {
                 />
               )}
               {activeTab === 'digital_league' && (
-                <LockedTab 
-                  title="Digital Scorecards" 
-                  description="Live digital tournament brackets, participant rankings, and play-off scorecards are locked. They will unlock automatically once registration closes and seedings are generated."
+                <DigitalLeagueSection
+                  userProfile={userProfile}
+                  digitalTournamentMatches={digitalTournamentMatches}
+                  isAdmin={isAdmin}
                 />
               )}
               {activeTab === 'rules' && (
@@ -1037,7 +1056,7 @@ export default function App() {
             </>
           ) : (
             <>
-              {/* Digital Home Tab (Locked) */}
+              {/* Digital Home Tab */}
               <button
                 onClick={() => setActiveTab('digital_home')}
                 className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
@@ -1047,8 +1066,7 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center gap-1">
-                  <Trophy className="w-4 h-4 text-slate-500" />
-                  <span className="text-[10px]">🔒</span>
+                  <Trophy className="w-4 h-4" />
                 </div>
                 <span className="font-display">Home</span>
               </button>
@@ -1066,7 +1084,7 @@ export default function App() {
                 <span className="font-display">Play Game</span>
               </button>
 
-              {/* Digital Scorecards Tab (Locked) */}
+              {/* Digital Scorecards Tab */}
               <button
                 onClick={() => setActiveTab('digital_league')}
                 className={`flex flex-col md:flex-row items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
@@ -1076,8 +1094,7 @@ export default function App() {
                 }`}
               >
                 <div className="flex items-center gap-1">
-                  <Calendar className="w-4 h-4 text-slate-500" />
-                  <span className="text-[10px]">🔒</span>
+                  <Calendar className="w-4 h-4" />
                 </div>
                 <span className="font-display">Scorecards</span>
               </button>

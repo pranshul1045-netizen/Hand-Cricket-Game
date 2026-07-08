@@ -28,6 +28,26 @@ export interface SchoolMatch {
   createdAt: any;
 }
 
+export interface DigitalTournamentMatch {
+  id: string;
+  player1: string;
+  player2: string;
+  player1Runs: number;
+  player2Runs: number;
+  player1Balls?: number;
+  player2Balls?: number;
+  player1Conceded?: number;
+  player2Conceded?: number;
+  winner?: string;
+  status: 'completed' | 'scheduled';
+  date?: string;
+  time?: string;
+  stage?: 'Group Stage' | 'Round of 32' | 'Round of 16' | 'Quarterfinal' | 'Semifinal' | 'Final' | '3rd-Place Match' | string;
+  group?: string; // Group 1 to 12
+  creatorId: string;
+  createdAt: any;
+}
+
 export interface DigitalMatch {
   id: string;
   playerUid: string;

@@ -101,6 +101,24 @@ service cloud.firestore {
              get(/databases/$(database)/documents/settings/tournament).data.schoolyardLocked == true;
     }
 
+    function isValidDigitalTournamentMatch(data) {
+      return data.player1 is string && data.player1.size() > 0 && data.player1.size() <= 100
+        && data.player2 is string && data.player2.size() > 0 && data.player2.size() <= 100
+        && (data.player1Runs is int || data.player1Runs is float) && data.player1Runs >= 0 && data.player1Runs <= 1000
+        && (data.player2Runs is int || data.player2Runs is float) && data.player2Runs >= 0 && data.player2Runs <= 1000
+        && (!('player1Balls' in data) || ((data.player1Balls is int || data.player1Balls is float) && data.player1Balls >= 0))
+        && (!('player2Balls' in data) || ((data.player2Balls is int || data.player2Balls is float) && data.player2Balls >= 0))
+        && (!('player1Conceded' in data) || ((data.player1Conceded is int || data.player1Conceded is float) && data.player1Conceded >= 0))
+        && (!('player2Conceded' in data) || ((data.player2Conceded is int || data.player2Conceded is float) && data.player2Conceded >= 0))
+        && (!('winner' in data) || (data.winner is string && data.winner.size() <= 100))
+        && data.status in ['completed', 'scheduled']
+        && (!('date' in data) || (data.date is string && data.date.size() <= 100))
+        && (!('time' in data) || (data.time is string && data.time.size() <= 20))
+        && (!('stage' in data) || (data.stage is string && data.stage.size() <= 100))
+        && (!('group' in data) || (data.group is string && data.group.size() <= 100))
+        && data.creatorId is string && data.creatorId.size() <= 128;
+    }
+
     // Rules matching collections
     match /users/{userId} {
       allow read: if true;
@@ -114,6 +132,15 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /digitalTournamentMatches/{matchId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(matchId) && isValidDigitalTournamentMatch(request.resource.data) && request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 50;
+      allow update: if isSignedIn() && isValidDigitalTournamentMatch(request.resource.data)
+        && request.resource.data.creatorId == resource.data.creatorId
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.creatorId == request.auth.uid);
+    }
+
     match /schoolMatches/{matchId} {
       allow read: if true;
       allow create: if !isSchoolyardLocked() && isValidId(matchId) && isValidSchoolMatch(request.resource.data) && request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 50;
@@ -124,7 +151,7 @@ service cloud.firestore {
     }
 
     match /digitalMatches/{matchId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow create: if isSignedIn() && isValidId(matchId) && isValidDigitalMatch(request.resource.data);
       allow update: if false; // Digital matches are immutable after played
       allow delete: if isAdmin() || (isSignedIn() && resource.data.playerUid == request.auth.uid);

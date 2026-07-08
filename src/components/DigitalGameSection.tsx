@@ -47,6 +47,7 @@ const isPlayerOnline = (lastActive: string | null) => {
 export default function DigitalGameSection({ 
   userProfile, 
   playerTeamName, 
+  digitalTournamentMatches,
   activeChallengeId, 
   setActiveChallengeId, 
   onGameSaved 
@@ -63,6 +64,24 @@ export default function DigitalGameSection({
   const [opponentType, setOpponentType] = useState<'cpu' | 'registered'>('cpu');
   const [registeredPlayers, setRegisteredPlayers] = useState<any[]>([]);
   const [selectedOpponent, setSelectedOpponent] = useState<any | null>(null);
+
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const upcomingTournamentMatches = (digitalTournamentMatches || []).filter(match => {
+    if (match.status !== 'scheduled') return false;
+    if (!playerTeamName || (match.player1 !== playerTeamName && match.player2 !== playerTeamName)) return false;
+    if (!match.date || !match.time) return false;
+    
+    const matchTimeMs = new Date(`${match.date}T${match.time}:00`).getTime();
+    if (isNaN(matchTimeMs)) return false;
+    
+    // Show match if it's within 5 minutes of starting, or up to 60 minutes after start time
+    return nowMs >= matchTimeMs - 5 * 60 * 1000 && nowMs <= matchTimeMs + 60 * 60 * 1000;
+  });
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'playerProfiles'), (snapshot) => {
@@ -1239,6 +1258,45 @@ export default function DigitalGameSection({
 
   return (
     <div id="digital-game-arena" className="max-w-5xl mx-auto space-y-6 pb-12">
+      {/* Upcoming Official Digital Matches Alert */}
+      {!activeChallengeId && phase === 'setup' && upcomingTournamentMatches.length > 0 && (
+        <div className="bg-gradient-to-r from-orange-500/20 to-purple-600/20 border border-orange-500/40 rounded-2xl p-6 shadow-xl relative overflow-hidden animate-pulse-slow">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/10 rounded-full blur-3xl transform translate-x-10 -translate-y-10"></div>
+          <div className="relative z-10 space-y-4">
+            <h3 className="font-display font-black text-xl text-orange-400 uppercase tracking-tight flex items-center gap-2">
+              <Trophy className="w-5 h-5" /> Official Match Starting Soon!
+            </h3>
+            {upcomingTournamentMatches.map(match => (
+              <div key={match.id} className="bg-[#1A2238]/80 border border-slate-700 p-4 rounded-xl flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-mono text-slate-400 uppercase tracking-wider mb-1">
+                    {match.stage} {match.group ? `- ${match.group}` : ''} | {match.time}
+                  </div>
+                  <div className="font-bold text-slate-200">
+                    <span className={match.player1 === playerTeamName ? 'text-orange-400 font-black' : ''}>{match.player1}</span>
+                    <span className="mx-2 text-slate-500 font-mono text-[10px]">VS</span>
+                    <span className={match.player2 === playerTeamName ? 'text-orange-400 font-black' : ''}>{match.player2}</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => {
+                    const opponentTeam = match.player1 === playerTeamName ? match.player2 : match.player1;
+                    const opp = registeredPlayers.find(p => p.teamName === opponentTeam);
+                    if (opp) {
+                      setOpponentType('registered');
+                      setSelectedOpponent(opp);
+                    }
+                  }}
+                  className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold uppercase transition-colors"
+                >
+                  Prepare
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {activeChallengeId && activeChallengeData ? (
         renderMultiplayerArena()
       ) : (
@@ -1981,6 +2039,7 @@ export default function DigitalGameSection({
 interface DigitalGameProps {
   userProfile: UserProfile | null;
   playerTeamName?: string | null;
+  digitalTournamentMatches?: import('../types').DigitalTournamentMatch[];
   activeChallengeId?: string | null;
   setActiveChallengeId?: (id: string | null) => void;
   onGameSaved: () => void;
