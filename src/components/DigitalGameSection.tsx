@@ -222,8 +222,12 @@ export default function DigitalGameSection({
         setIsMyTurnSubmitted(!!mySubmitted);
 
         // Process turn resolution on Challenger (p1) side if both moves are submitted
-        if (data.p1MoveSubmitted && data.p2MoveSubmitted && isChallenger) {
-          resolveMultiplayerTurn(data);
+        if (data.p1MoveSubmitted && data.p2MoveSubmitted && isChallenger && !data.isResolvingTurn) {
+          const docRef = doc(db, 'gameChallenges', activeChallengeId);
+          setDoc(docRef, { isResolvingTurn: true }, { merge: true });
+          setTimeout(() => {
+            resolveMultiplayerTurn(data);
+          }, 2500);
         }
       }
     });
@@ -255,17 +259,67 @@ export default function DigitalGameSection({
     return () => clearInterval(interval);
   }, [activeChallengeData, isMyTurnSubmitted, myPlayerRole]);
 
-  // Determine coin flip tossWinner on Challenger's side
+  // Determine coin flip tossCaller on Challenger's side
   useEffect(() => {
-    if (activeChallengeData && activeChallengeData.status === 'accepted' && !activeChallengeData.tossWinner && myPlayerRole === 'p1') {
-      const winner = Math.random() < 0.5 ? 'p1' : 'p2';
+    if (activeChallengeData && activeChallengeData.status === 'accepted' && !activeChallengeData.tossCaller && myPlayerRole === 'p1') {
+      const caller = Math.random() < 0.5 ? 'p1' : 'p2';
       const docRef = doc(db, 'gameChallenges', activeChallengeId!);
       setDoc(docRef, {
-        tossWinner: winner,
+        tossCaller: caller,
         updatedAt: new Date().toISOString()
       }, { merge: true }).catch(console.error);
     }
   }, [activeChallengeData, myPlayerRole, activeChallengeId]);
+
+  // Determine toss winner after both play their toss move
+  useEffect(() => {
+    if (activeChallengeData && activeChallengeData.status === 'accepted' && activeChallengeData.tossOddEvenChoice && activeChallengeData.tossP1Move && activeChallengeData.tossP2Move && !activeChallengeData.tossWinner && myPlayerRole === 'p1' && !activeChallengeData.isResolvingToss) {
+      
+      const docRef = doc(db, 'gameChallenges', activeChallengeId!);
+      setDoc(docRef, { isResolvingToss: true }, { merge: true });
+      
+      setTimeout(() => {
+        const sum = activeChallengeData.tossP1Move + activeChallengeData.tossP2Move;
+        const sumIsEven = sum % 2 === 0;
+        const callerChoseEven = activeChallengeData.tossOddEvenChoice === 'even';
+        const callerWon = (callerChoseEven && sumIsEven) || (!callerChoseEven && !sumIsEven);
+        
+        const winner = callerWon ? activeChallengeData.tossCaller : (activeChallengeData.tossCaller === 'p1' ? 'p2' : 'p1');
+        
+        setDoc(docRef, {
+          tossWinner: winner,
+          isResolvingToss: false,
+          updatedAt: new Date().toISOString()
+        }, { merge: true }).catch(console.error);
+      }, 2500);
+    }
+  }, [activeChallengeData, myPlayerRole, activeChallengeId]);
+
+  const selectMultiplayerTossOddEven = async (choice: 'odd' | 'even') => {
+    if (!activeChallengeId) return;
+    try {
+      const docRef = doc(db, 'gameChallenges', activeChallengeId);
+      await setDoc(docRef, { tossOddEvenChoice: choice }, { merge: true });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const submitMultiplayerTossMove = async (move: number) => {
+    if (!activeChallengeId || !myPlayerRole) return;
+    try {
+      const docRef = doc(db, 'gameChallenges', activeChallengeId);
+      const updates: any = {};
+      if (myPlayerRole === 'p1') {
+        updates.tossP1Move = move;
+      } else {
+        updates.tossP2Move = move;
+      }
+      await setDoc(docRef, updates, { merge: true });
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const submitMultiplayerMove = async (move: number, isAuto = false) => {
     if (!activeChallengeId || !myPlayerRole) return;
@@ -379,6 +433,7 @@ export default function DigitalGameSection({
         currentTurn: (data.currentTurn ?? 0) + 1,
         p1MoveSubmitted: false,
         p2MoveSubmitted: false,
+        isResolvingTurn: false,
         gameEnded,
         status,
         commentary,
@@ -759,6 +814,9 @@ export default function DigitalGameSection({
       const isWinnerMe = activeChallengeData.tossWinner === myPlayerRole;
       const winnerName = activeChallengeData.tossWinner === 'p1' ? activeChallengeData.challengerName : activeChallengeData.targetName;
       
+      const isCallerMe = activeChallengeData.tossCaller === myPlayerRole;
+      const callerName = activeChallengeData.tossCaller === 'p1' ? activeChallengeData.challengerName : activeChallengeData.targetName;
+
       return (
         <div className="bg-[#161D2F] border border-slate-700 rounded-3xl p-8 max-w-xl mx-auto shadow-2xl space-y-8 text-center relative overflow-hidden">
           <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-orange-500 to-purple-600 animate-pulse" />
@@ -768,14 +826,78 @@ export default function DigitalGameSection({
               🪙 Real-time Coin Flip
             </span>
             <h2 className="font-display font-black text-3xl text-slate-100 tracking-tight uppercase">
-              TOSS DECIDED!
+              {activeChallengeData.tossWinner ? "TOSS DECIDED!" : "THE TOSS"}
             </h2>
           </div>
 
-          {!activeChallengeData.tossWinner ? (
+          {!activeChallengeData.tossCaller ? (
             <div className="py-6 space-y-4">
               <RefreshCw className="w-12 h-12 animate-spin text-orange-400 mx-auto" />
-              <p className="text-sm font-medium text-slate-400">Flipping the digital coin...</p>
+              <p className="text-sm font-medium text-slate-400">Initializing toss...</p>
+            </div>
+          ) : !activeChallengeData.tossOddEvenChoice ? (
+            <div className="space-y-6">
+              {isCallerMe ? (
+                <>
+                  <p className="text-slate-300 font-bold">You were chosen to call the toss!</p>
+                  <div className="flex gap-4 justify-center">
+                    <button onClick={() => selectMultiplayerTossOddEven('odd')} className="px-6 py-3 bg-purple-500/20 text-purple-300 border border-purple-500/50 rounded-xl hover:bg-purple-500/30 transition-colors font-bold uppercase tracking-wider">ODD</button>
+                    <button onClick={() => selectMultiplayerTossOddEven('even')} className="px-6 py-3 bg-orange-500/20 text-orange-300 border border-orange-500/50 rounded-xl hover:bg-orange-500/30 transition-colors font-bold uppercase tracking-wider">EVEN</button>
+                  </div>
+                </>
+              ) : (
+                <div className="p-6 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-4 max-w-md mx-auto">
+                  <p className="text-sm text-slate-300 font-medium">
+                    Waiting for <strong>{callerName}</strong> to pick Odd or Even...
+                  </p>
+                  <RefreshCw className="w-6 h-6 animate-spin text-orange-500 mx-auto" />
+                </div>
+              )}
+            </div>
+          ) : !activeChallengeData.tossWinner ? (
+            <div className="space-y-6">
+              <p className="text-slate-300 text-sm">
+                <strong>{callerName}</strong> chose <span className="font-bold text-orange-400 uppercase">{activeChallengeData.tossOddEvenChoice}</span>.
+              </p>
+              
+              {((myPlayerRole === 'p1' && activeChallengeData.tossP1Move) || (myPlayerRole === 'p2' && activeChallengeData.tossP2Move)) ? (
+                <div className="p-6 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-4 max-w-md mx-auto">
+                  {activeChallengeData.isResolvingToss ? (
+                    <div>
+                      <p className="text-sm text-slate-300 font-medium mb-2">Resolving Toss...</p>
+                      <div className="flex items-center justify-center gap-4 text-3xl">
+                        <span>{handGestures[activeChallengeData.tossP1Move]?.icon}</span>
+                        <span className="text-sm font-bold text-slate-500">vs</span>
+                        <span>{handGestures[activeChallengeData.tossP2Move]?.icon}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-sm text-slate-300 font-medium">Move locked in!</p>
+                      <div className="flex items-center justify-center gap-2 text-xs text-slate-500">
+                        <RefreshCw className="w-4 h-4 animate-spin text-orange-500" />
+                        Waiting for opponent...
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <p className="text-slate-400 font-bold mb-4">Pick a number (1-6) for the toss!</p>
+                  <div className="grid grid-cols-3 gap-3 max-w-sm mx-auto">
+                    {[1, 2, 3, 4, 5, 6].map((num) => (
+                      <button
+                        key={num}
+                        onClick={() => submitMultiplayerTossMove(num)}
+                        className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${handGestures[num].style}`}
+                      >
+                        <span className="text-2xl mb-1">{handGestures[num].icon}</span>
+                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider">{num}</span>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           ) : isWinnerMe ? (
             <div className="space-y-6">
@@ -886,7 +1008,7 @@ export default function DigitalGameSection({
     const batsmanScore = isP1Batsman ? activeChallengeData.p1Score : activeChallengeData.p2Score;
 
     // Moves representation
-    const revealMoves = activeChallengeData.p1MoveSubmitted && activeChallengeData.p2MoveSubmitted;
+    const revealMoves = activeChallengeData.isResolvingTurn || (activeChallengeData.p1MoveSubmitted && activeChallengeData.p2MoveSubmitted);
     const mySubmittedMove = myPlayerRole === 'p1' ? activeChallengeData.p1LastMove : activeChallengeData.p2LastMove;
     
     const displayBatsmanMove = revealMoves 
