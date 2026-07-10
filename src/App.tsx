@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Trophy, Gamepad2, BookOpen, Sparkles, LogIn, LogOut, 
-  User, Loader2, Calendar, ShieldAlert, CheckCircle2, Megaphone, Lock
+  User, Loader2, Calendar, ShieldAlert, CheckCircle2, Megaphone, Lock,
+  Settings, X, Edit3, Save
 } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { 
@@ -9,7 +10,7 @@ import {
   GoogleAuthProvider, signOut 
 } from 'firebase/auth';
 import { 
-  doc, onSnapshot, setDoc, getDoc, collection, query, orderBy, where 
+  doc, onSnapshot, setDoc, getDoc, getDocs, collection, query, orderBy, where 
 } from 'firebase/firestore';
 import { UserProfile, SchoolMatch, DigitalTournamentMatch } from './types';
 
@@ -156,6 +157,71 @@ export default function App() {
   // Real-time Multiplayer states
   const [activeChallengeId, setActiveChallengeId] = useState<string | null>(null);
   const [incomingChallenge, setIncomingChallenge] = useState<any>(null);
+
+  // Profile Modal State
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editTeamName, setEditTeamName] = useState('');
+  const [editBattingStyle, setEditBattingStyle] = useState<'Right-handed' | 'Left-handed'>('Right-handed');
+  const [editFavoriteNumber, setEditFavoriteNumber] = useState<number>(6);
+  const [editPhotoURL, setEditPhotoURL] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState('');
+
+  const handleOpenProfileModal = () => {
+    if (!userProfile) return;
+    setEditDisplayName(userProfile.displayName || '');
+    setEditTeamName(userProfile.teamName || playerTeamName || '');
+    setEditBattingStyle(userProfile.battingStyle || 'Right-handed');
+    setEditFavoriteNumber(userProfile.favoriteNumber || 6);
+    setEditPhotoURL(userProfile.photoURL || '');
+    setProfileError('');
+    setIsProfileModalOpen(true);
+  };
+
+  const handleSaveProfileChanges = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editDisplayName.trim()) {
+      setProfileError('Display Name is required');
+      return;
+    }
+    setIsSavingProfile(true);
+    setProfileError('');
+
+    try {
+      const updatedProfile: UserProfile = {
+        ...userProfile,
+        uid: userProfile?.uid || 'guest_local',
+        displayName: editDisplayName.trim(),
+        teamName: editTeamName.trim(),
+        battingStyle: editBattingStyle,
+        favoriteNumber: editFavoriteNumber,
+        photoURL: editPhotoURL.trim(),
+        role: userProfile?.role || 'user'
+      };
+
+      if (isPlayerLogin && playerDocId) {
+        const docRef = doc(db, 'playerProfiles', playerDocId);
+        await setDoc(docRef, {
+          name: editDisplayName.trim(),
+          teamName: editTeamName.trim(),
+          photoURL: editPhotoURL.trim(),
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        setPlayerTeamName(editTeamName.trim());
+      }
+
+      setUserProfile(updatedProfile);
+      localStorage.setItem('hcl_local_guest_profile', JSON.stringify(updatedProfile));
+      setIsProfileModalOpen(false);
+    } catch (err: any) {
+      console.error("Error updating profile settings: ", err);
+      setProfileError(err.message || 'Failed to update profile settings.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
 
   // Is super admin check
   const isAdmin = 
@@ -408,16 +474,80 @@ export default function App() {
     if (!nameInput.trim() || !playerDocId) return;
     try {
       const docRef = doc(db, 'playerProfiles', playerDocId);
+      
+      // Let's get the existing document snapshot first to check if they already have a group
+      const docSnap = await getDoc(docRef);
+      let assignedGroup = 'Unknown';
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.group && data.group !== 'Unknown') {
+          assignedGroup = data.group;
+        }
+      }
+      
+      // If no valid group is assigned yet, calculate and assign a random group out of 12 (max 4 per group)
+      if (assignedGroup === 'Unknown' || !assignedGroup) {
+        // Fetch all existing playerProfiles to calculate group counts
+        const profilesSnap = await getDocs(collection(db, 'playerProfiles'));
+        const groupCounts: Record<number, number> = {};
+        for (let i = 1; i <= 12; i++) {
+          groupCounts[i] = 0;
+        }
+        
+        profilesSnap.forEach((profileDoc) => {
+          const profileData = profileDoc.data();
+          if (profileData.group) {
+            const num = parseInt(profileData.group.replace(/\D/g, ''), 10);
+            if (num >= 1 && num <= 12) {
+              groupCounts[num] = (groupCounts[num] || 0) + 1;
+            }
+          }
+        });
+        
+        // Find groups with fewer than 4 players
+        const availableGroups = Object.keys(groupCounts)
+          .map(Number)
+          .filter(gNum => groupCounts[gNum] < 4);
+          
+        if (availableGroups.length > 0) {
+          const randomIdx = Math.floor(Math.random() * availableGroups.length);
+          assignedGroup = `Group ${availableGroups[randomIdx]}`;
+        } else {
+          // If all groups are full, find the group(s) with the minimum number of players
+          let minCount = Infinity;
+          let minGroups: number[] = [];
+          for (let i = 1; i <= 12; i++) {
+            const cnt = groupCounts[i] || 0;
+            if (cnt < minCount) {
+              minCount = cnt;
+              minGroups = [i];
+            } else if (cnt === minCount) {
+              minGroups.push(i);
+            }
+          }
+          const randomIdx = Math.floor(Math.random() * minGroups.length);
+          assignedGroup = `Group ${minGroups[randomIdx]}`;
+        }
+      }
+
       await setDoc(docRef, {
-        teamName: nameInput.trim()
+        teamName: nameInput.trim(),
+        group: assignedGroup,
+        updatedAt: new Date().toISOString()
       }, { merge: true });
+
       if (userProfile) {
-        const updatedProfile = { ...userProfile, teamName: nameInput.trim() };
+        const updatedProfile = { 
+          ...userProfile, 
+          teamName: nameInput.trim(),
+          group: assignedGroup
+        };
         setUserProfile(updatedProfile);
         localStorage.setItem('hcl_local_guest_profile', JSON.stringify(updatedProfile));
       }
     } catch (err) {
-      console.error("Failed to save team name: ", err);
+      console.error("Failed to save team name and assign group: ", err);
       throw err;
     }
   };
@@ -755,6 +885,15 @@ export default function App() {
           )}
           <div className="flex flex-col items-end">
             <div className="flex items-center gap-2 bg-[#161D2F] px-3 py-1.5 rounded-lg border border-slate-700">
+              {userProfile && (
+                <button
+                  onClick={handleOpenProfileModal}
+                  className="p-1 text-slate-400 hover:text-orange-400 transition-colors cursor-pointer mr-0.5 flex items-center gap-1"
+                  title="Edit Profile & Team Name"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                </button>
+              )}
               <span className="text-xs font-bold text-slate-300">
                 {userProfile?.displayName || 'Player'}
               </span>
@@ -1187,6 +1326,155 @@ export default function App() {
                 Accept & Play!
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Profile Customization & Team Name Settings Modal */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-[#161D2F] border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl relative overflow-hidden space-y-6">
+            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-orange-500 to-red-600" />
+            
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-orange-400" />
+                <h3 className="font-display font-black text-lg text-slate-100 uppercase tracking-tight">
+                  Edit Profile & Team
+                </h3>
+              </div>
+              <button
+                onClick={() => setIsProfileModalOpen(false)}
+                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {profileError && (
+              <div className="bg-red-500/15 border border-red-500/30 text-red-400 text-xs py-2 px-3 rounded-xl font-bold text-center">
+                {profileError}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfileChanges} className="space-y-4">
+              {/* Profile Group Badge if available */}
+              {userProfile?.group && userProfile.group !== 'Unknown' && (
+                <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-3 flex justify-between items-center">
+                  <span className="text-xs font-mono text-slate-400 font-bold uppercase">Assigned Bracket</span>
+                  <span className="bg-orange-500 text-white font-display font-black text-[10px] uppercase tracking-widest px-3 py-1 rounded-full">
+                    {userProfile.group}
+                  </span>
+                </div>
+              )}
+
+              {/* Player Display Name */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                  Player Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={15}
+                  value={editDisplayName}
+                  onChange={(e) => setEditDisplayName(e.target.value)}
+                  className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-bold tracking-wide"
+                  placeholder="Enter player name"
+                />
+              </div>
+
+              {/* My Team Name */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                  My Team Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={25}
+                  value={editTeamName}
+                  onChange={(e) => setEditTeamName(e.target.value)}
+                  className="w-full bg-[#1A2238] border border-slate-700 px-4 py-3 rounded-xl text-sm focus:outline-none focus:border-orange-500 text-slate-100 font-bold tracking-wide"
+                  placeholder="E.g. Royal Gladiators"
+                />
+              </div>
+
+              {/* Batting Stance */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                  Batting Stance
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditBattingStyle('Right-handed')}
+                    className={`px-4 py-3 rounded-xl text-center font-bold border text-xs tracking-wider uppercase transition-all cursor-pointer ${
+                      editBattingStyle === 'Right-handed'
+                        ? 'bg-orange-500/15 border-orange-500 text-orange-400'
+                        : 'bg-[#1A2238] border-slate-700 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Right-handed
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditBattingStyle('Left-handed')}
+                    className={`px-4 py-3 rounded-xl text-center font-bold border text-xs tracking-wider uppercase transition-all cursor-pointer ${
+                      editBattingStyle === 'Left-handed'
+                        ? 'bg-orange-500/15 border-orange-500 text-orange-400'
+                        : 'bg-[#1A2238] border-slate-700 text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Left-handed
+                  </button>
+                </div>
+              </div>
+
+              {/* Favorite Number Selection */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider block">
+                  Favorite Prediction Number (1-6)
+                </label>
+                <div className="grid grid-cols-6 gap-1.5 font-mono">
+                  {[1, 2, 3, 4, 5, 6].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setEditFavoriteNumber(num)}
+                      className={`py-2.5 rounded-xl text-center font-black transition-all border cursor-pointer text-xs ${
+                        editFavoriteNumber === num
+                          ? 'bg-orange-500/15 border-orange-500 text-orange-400'
+                          : 'bg-[#1A2238] border-slate-700 text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="h-px bg-slate-800 my-4"></div>
+
+              {/* Save Button */}
+              <button
+                type="submit"
+                disabled={isSavingProfile || !editDisplayName.trim()}
+                className="w-full bg-gradient-to-r from-orange-500 to-red-600 text-white font-display font-black text-xs uppercase tracking-wide py-4 rounded-xl shadow-[0_3.5px_0_0_#9a3412] hover:brightness-105 active:translate-y-0.5 active:shadow-none transition-all duration-100 flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+              >
+                {isSavingProfile ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Saving Changes...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save Settings
+                  </>
+                )}
+              </button>
+            </form>
           </div>
         </div>
       )}

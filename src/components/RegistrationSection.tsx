@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { 
-  collection, doc, setDoc, onSnapshot, query, orderBy, deleteDoc, updateDoc
+  collection, doc, setDoc, getDocs, onSnapshot, query, orderBy, deleteDoc, updateDoc
 } from 'firebase/firestore';
 import { formatGroupName } from '../types';
 
@@ -119,14 +119,17 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
       
       const docId = reg.name.toLowerCase();
       
-      // Calculate current player count in each group (from 1 to 12)
+      // Calculate current player count in each group (from 1 to 12) from playerProfiles
       const groupCounts: Record<number, number> = {};
       for (let i = 1; i <= 12; i++) {
         groupCounts[i] = 0;
       }
-      registrations.forEach(r => {
-        if (r.status === 'confirmed' && r.group) {
-          const num = parseInt(r.group.replace(/\D/g, ''), 10);
+      
+      const profilesSnap = await getDocs(collection(db, 'playerProfiles'));
+      profilesSnap.forEach((profileDoc) => {
+        const profileData = profileDoc.data();
+        if (profileData.group) {
+          const num = parseInt(profileData.group.replace(/\D/g, ''), 10);
           if (num >= 1 && num <= 12) {
             groupCounts[num] = (groupCounts[num] || 0) + 1;
           }
@@ -139,16 +142,27 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
         .filter(gNum => groupCounts[gNum] < 4);
 
       let assignedGroup = reg.group;
-      if (!assignedGroup) {
+      if (!assignedGroup || assignedGroup === 'Unknown') {
         if (availableGroups.length > 0) {
           // Choose one of the available groups randomly
           const randomIdx = Math.floor(Math.random() * availableGroups.length);
           const chosenGroupNum = availableGroups[randomIdx];
           assignedGroup = `Group ${chosenGroupNum}`;
         } else {
-          // Fallback if all groups are full
-          const randomGroupNum = Math.floor(Math.random() * 12) + 1;
-          assignedGroup = `Group ${randomGroupNum}`;
+          // If all groups are full, find the group(s) with the minimum number of players
+          let minCount = Infinity;
+          let minGroups: number[] = [];
+          for (let i = 1; i <= 12; i++) {
+            const cnt = groupCounts[i] || 0;
+            if (cnt < minCount) {
+              minCount = cnt;
+              minGroups = [i];
+            } else if (cnt === minCount) {
+              minGroups.push(i);
+            }
+          }
+          const randomIdx = Math.floor(Math.random() * minGroups.length);
+          assignedGroup = `Group ${minGroups[randomIdx]}`;
         }
       }
 

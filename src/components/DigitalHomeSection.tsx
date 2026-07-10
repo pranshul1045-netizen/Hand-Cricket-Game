@@ -232,6 +232,7 @@ export default function DigitalHomeSection() {
                 <th className="pb-3 font-mono text-[10px] uppercase tracking-wider font-bold pl-2">Player</th>
                 <th className="pb-3 font-mono text-[10px] uppercase tracking-wider font-bold">Matches</th>
                 <th className="pb-3 font-mono text-[10px] uppercase tracking-wider font-bold">Wins</th>
+                <th className="pb-3 font-mono text-[10px] uppercase tracking-wider font-bold">PTS</th>
                 <th className="pb-3 font-mono text-[10px] uppercase tracking-wider font-bold">Runs</th>
                 <th className="pb-3 font-mono text-[10px] uppercase tracking-wider font-bold">Conceded</th>
                 <th className="pb-3 font-mono text-[10px] uppercase tracking-wider font-bold text-right pr-2">Run Rate</th>
@@ -243,7 +244,7 @@ export default function DigitalHomeSection() {
                 return (
                   <React.Fragment key={groupName}>
                     <tr className="bg-slate-800/30">
-                      <td colSpan={6} className="py-2 pl-2 text-[10px] font-mono font-black text-orange-400 uppercase tracking-widest">
+                      <td colSpan={7} className="py-2 pl-2 text-[10px] font-mono font-black text-orange-400 uppercase tracking-widest">
                         {formatGroupName(groupName)}
                       </td>
                     </tr>
@@ -255,6 +256,7 @@ export default function DigitalHomeSection() {
                         </td>
                         <td className="py-4 font-mono text-slate-300">{p.matches}</td>
                         <td className="py-4 font-mono text-green-400 font-bold">{p.wins}</td>
+                        <td className="py-4 font-mono text-[#00E5FF] font-black">{p.wins * 2}</td>
                         <td className="py-4 font-mono text-orange-400 font-bold">{p.runs}</td>
                         <td className="py-4 font-mono text-purple-400 font-bold">{p.runsConceded}</td>
                         <td className="py-4 font-mono text-blue-400 font-bold text-right pr-2">{p.runRate}</td>
@@ -265,7 +267,7 @@ export default function DigitalHomeSection() {
               })}
               {sortedGroups.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500 text-xs">
+                  <td colSpan={7} className="py-8 text-center text-slate-500 text-xs">
                     No matches played yet.
                   </td>
                 </tr>

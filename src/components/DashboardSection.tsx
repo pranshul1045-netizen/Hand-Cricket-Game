@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Award, Shield, User, Edit3, Save, Flame, Trophy, TrendingUp, Sparkles, Upload, Target, Activity, BarChart2 } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
-import { doc, setDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, updateDoc, collection, onSnapshot } from 'firebase/firestore';
 import { UserProfile, SchoolMatch, PlayerStanding, formatGroupName } from '../types';
 
 const AVATAR_PRESETS = [
@@ -167,11 +167,66 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
     try {
       const docId = targetName.toLowerCase();
       const finalPin = 'password';
+      const docRef = doc(db, 'playerProfiles', docId);
 
-      await setDoc(doc(db, 'playerProfiles', docId), {
+      // Check if they already have a group assigned
+      const docSnap = await getDoc(docRef);
+      let assignedGroup = 'Unknown';
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.group && data.group !== 'Unknown') {
+          assignedGroup = data.group;
+        }
+      }
+
+      if (assignedGroup === 'Unknown' || !assignedGroup) {
+        // Calculate current group counts
+        const groupCounts: Record<number, number> = {};
+        for (let i = 1; i <= 12; i++) {
+          groupCounts[i] = 0;
+        }
+        const profilesSnap = await getDocs(collection(db, 'playerProfiles'));
+        profilesSnap.forEach((pDoc) => {
+          const pData = pDoc.data();
+          if (pData.group) {
+            const num = parseInt(pData.group.replace(/\D/g, ''), 10);
+            if (num >= 1 && num <= 12) {
+              groupCounts[num] = (groupCounts[num] || 0) + 1;
+            }
+          }
+        });
+
+        // Find groups with fewer than 4 players
+        const availableGroups = Object.keys(groupCounts)
+          .map(Number)
+          .filter(gNum => groupCounts[gNum] < 4);
+
+        if (availableGroups.length > 0) {
+          const randomIdx = Math.floor(Math.random() * availableGroups.length);
+          assignedGroup = `Group ${availableGroups[randomIdx]}`;
+        } else {
+          // If all groups are full, find the group(s) with the minimum number of players
+          let minCount = Infinity;
+          let minGroups: number[] = [];
+          for (let i = 1; i <= 12; i++) {
+            const cnt = groupCounts[i] || 0;
+            if (cnt < minCount) {
+              minCount = cnt;
+              minGroups = [i];
+            } else if (cnt === minCount) {
+              minGroups.push(i);
+            }
+          }
+          const randomIdx = Math.floor(Math.random() * minGroups.length);
+          assignedGroup = `Group ${minGroups[randomIdx]}`;
+        }
+      }
+
+      await setDoc(docRef, {
         name: targetName,
         photoURL: customPlayerPhotoURL.trim(),
         pin: finalPin,
+        group: assignedGroup,
         updatedAt: new Date().toISOString()
       }, { merge: true });
       
