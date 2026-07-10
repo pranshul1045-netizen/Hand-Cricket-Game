@@ -7,6 +7,7 @@ import { db, handleFirestoreError, OperationType } from '../firebase';
 import { 
   collection, doc, setDoc, onSnapshot, query, orderBy, deleteDoc, updateDoc
 } from 'firebase/firestore';
+import { formatGroupName } from '../types';
 
 interface RegistrationSectionProps {
   userProfile: any;
@@ -85,6 +86,7 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
         name: name.trim(),
         classSec: classSec.trim(),
         school: school.trim(),
+        teamName: `${name.trim()} XI`,
         whatsapp: whatsapp.trim(),
         pin: pin.trim(),
         createdAt: new Date().toISOString(),
@@ -115,20 +117,62 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
     try {
       setActionError('');
       
-      // 1. Create/Update player login profile in 'playerProfiles'
       const docId = reg.name.toLowerCase();
+      
+      // Calculate current player count in each group (from 1 to 12)
+      const groupCounts: Record<number, number> = {};
+      for (let i = 1; i <= 12; i++) {
+        groupCounts[i] = 0;
+      }
+      registrations.forEach(r => {
+        if (r.status === 'confirmed' && r.group) {
+          const num = parseInt(r.group.replace(/\D/g, ''), 10);
+          if (num >= 1 && num <= 12) {
+            groupCounts[num] = (groupCounts[num] || 0) + 1;
+          }
+        }
+      });
+
+      // Find groups that have fewer than 4 players
+      const availableGroups = Object.keys(groupCounts)
+        .map(Number)
+        .filter(gNum => groupCounts[gNum] < 4);
+
+      let assignedGroup = reg.group;
+      if (!assignedGroup) {
+        if (availableGroups.length > 0) {
+          // Choose one of the available groups randomly
+          const randomIdx = Math.floor(Math.random() * availableGroups.length);
+          const chosenGroupNum = availableGroups[randomIdx];
+          assignedGroup = `Group ${chosenGroupNum}`;
+        } else {
+          // Fallback if all groups are full
+          const randomGroupNum = Math.floor(Math.random() * 12) + 1;
+          assignedGroup = `Group ${randomGroupNum}`;
+        }
+      }
+
+      const playerTeam = reg.teamName || `${reg.name} XI`;
+
+      // 1. Create/Update player login profile in 'playerProfiles'
       await setDoc(doc(db, 'playerProfiles', docId), {
         name: reg.name,
         pin: reg.pin || 'password', // use their registered custom PIN or fallback to 'password'
         classSec: reg.classSec,
         school: reg.school,
         whatsapp: reg.whatsapp,
+        teamName: playerTeam,
+        group: assignedGroup,
         updatedAt: new Date().toISOString()
       }, { merge: true });
 
       // 2. Update status in registrations
       const regRef = doc(db, 'registrations', reg.id);
-      await updateDoc(regRef, { status: 'confirmed' });
+      await updateDoc(regRef, { 
+        status: 'confirmed',
+        group: assignedGroup,
+        teamName: playerTeam
+      });
 
       // Open the message popup
       setSelectedRegForMsg({ ...reg, status: 'confirmed' });
@@ -393,6 +437,7 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
                     <th className="py-3 px-4">School</th>
                     <th className="py-3 px-4">WhatsApp No</th>
                     <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4">Group</th>
                     <th className="py-3 px-4">PIN/Password</th>
                     <th className="py-3 px-4">Date Registered</th>
                     <th className="py-3 px-4 w-24 text-center">Actions</th>
@@ -424,6 +469,17 @@ export default function RegistrationSection({ userProfile, isAdmin, schoolyardLo
                         ) : (
                           <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded-full text-[10px] font-bold font-mono uppercase">
                             <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" /> Pending
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4 font-mono font-bold">
+                        {reg.status === 'confirmed' ? (
+                          <span className="text-orange-400 text-xs">
+                            {formatGroupName(reg.group)}
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 text-xs">
+                            TBD
                           </span>
                         )}
                       </td>

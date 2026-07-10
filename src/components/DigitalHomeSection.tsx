@@ -2,9 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { Trophy, Star, Shield, Medal, Target } from 'lucide-react';
 import { db, handleFirestoreError, OperationType } from '../firebase';
 import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
+import { formatGroupName } from '../types';
 
 export default function DigitalHomeSection() {
   const [digitalTournamentMatches, setDigitalTournamentMatches] = useState<any[]>([]);
+  const [playerProfiles, setPlayerProfiles] = useState<any[]>([]);
 
   useEffect(() => {
     const mmQuery = query(collection(db, 'digitalTournamentMatches'), where('status', '==', 'completed'));
@@ -18,8 +20,19 @@ export default function DigitalHomeSection() {
       console.error("Error listening to digitalTournamentMatches: ", error);
     });
 
+    const unsubProfiles = onSnapshot(collection(db, 'playerProfiles'), (snapshot) => {
+      const profiles: any[] = [];
+      snapshot.forEach((doc) => {
+        profiles.push({ id: doc.id, ...doc.data() });
+      });
+      setPlayerProfiles(profiles);
+    }, (error) => {
+      console.error("Error listening to playerProfiles: ", error);
+    });
+
     return () => {
       unsubMm();
+      unsubProfiles();
     };
   }, []);
 
@@ -35,32 +48,67 @@ export default function DigitalHomeSection() {
     runRate: number;
   }> = {};
 
+  // Pre-populate with registered player profiles
+  playerProfiles.forEach(profile => {
+    const pName = profile.name;
+    if (pName) {
+      statsMap[pName.toLowerCase()] = {
+        name: pName,
+        teamName: profile.teamName || `${pName} XI`,
+        runs: 0,
+        runsConceded: 0,
+        wins: 0,
+        matches: 0,
+        group: profile.group || 'Unknown',
+        runRate: 0
+      };
+    }
+  });
+
+  // First pass: resolve groups for all players based on matches if not already known
   digitalTournamentMatches.forEach(m => {
     const p1 = m.player1 || 'Unknown';
     const p2 = m.player2 || 'Unknown';
-    if (!statsMap[p1]) statsMap[p1] = { name: p1, teamName: p1, runs: 0, runsConceded: 0, wins: 0, matches: 0, group: m.group || 'Unknown', runRate: 0 };
-    if (!statsMap[p2]) statsMap[p2] = { name: p2, teamName: p2, runs: 0, runsConceded: 0, wins: 0, matches: 0, group: m.group || 'Unknown', runRate: 0 };
+    const p1Key = p1.toLowerCase();
+    const p2Key = p2.toLowerCase();
+    if (!statsMap[p1Key]) statsMap[p1Key] = { name: p1, teamName: p1, runs: 0, runsConceded: 0, wins: 0, matches: 0, group: m.group || 'Unknown', runRate: 0 };
+    if (!statsMap[p2Key]) statsMap[p2Key] = { name: p2, teamName: p2, runs: 0, runsConceded: 0, wins: 0, matches: 0, group: m.group || 'Unknown', runRate: 0 };
 
-    // Update group if it was 'Unknown'
     if (m.group) {
-      if (statsMap[p1].group === 'Unknown') statsMap[p1].group = m.group;
-      if (statsMap[p2].group === 'Unknown') statsMap[p2].group = m.group;
+      if (statsMap[p1Key].group === 'Unknown') statsMap[p1Key].group = m.group;
+      if (statsMap[p2Key].group === 'Unknown') statsMap[p2Key].group = m.group;
     }
+  });
 
-    if (m.status === 'completed') {
-      statsMap[p1].runs += (m.player1Runs || 0);
-      statsMap[p1].runsConceded += (m.player2Runs || 0);
-      statsMap[p2].runs += (m.player2Runs || 0);
-      statsMap[p2].runsConceded += (m.player1Runs || 0);
+  // Second pass: accumulate stats only if both players are confirmed in the exact same group
+  digitalTournamentMatches.forEach(m => {
+    if (m.status !== 'completed') return;
+
+    const p1 = m.player1 || 'Unknown';
+    const p2 = m.player2 || 'Unknown';
+    const p1Key = p1.toLowerCase();
+    const p2Key = p2.toLowerCase();
+
+    const p1Group = statsMap[p1Key]?.group || 'Unknown';
+    const p2Group = statsMap[p2Key]?.group || 'Unknown';
+
+    // Standing is decided ONLY by matches played between group players (same group, total 4 in group)
+    const isSameGroup = p1Group !== 'Unknown' && p1Group === p2Group;
+
+    if (isSameGroup) {
+      statsMap[p1Key].runs += (m.player1Runs || 0);
+      statsMap[p1Key].runsConceded += (m.player2Runs || 0);
+      statsMap[p2Key].runs += (m.player2Runs || 0);
+      statsMap[p2Key].runsConceded += (m.player1Runs || 0);
       
-      statsMap[p1].matches += 1;
-      statsMap[p2].matches += 1;
+      statsMap[p1Key].matches += 1;
+      statsMap[p2Key].matches += 1;
 
-      // determine winner from score
+      // determine winner
       if (m.winner === p1 || m.winner === 'player1') {
-        statsMap[p1].wins += 1;
+        statsMap[p1Key].wins += 1;
       } else if (m.winner === p2 || m.winner === 'player2') {
-        statsMap[p2].wins += 1;
+        statsMap[p2Key].wins += 1;
       }
     }
   });
@@ -196,7 +244,7 @@ export default function DigitalHomeSection() {
                   <React.Fragment key={groupName}>
                     <tr className="bg-slate-800/30">
                       <td colSpan={6} className="py-2 pl-2 text-[10px] font-mono font-black text-orange-400 uppercase tracking-widest">
-                        {groupName}
+                        {formatGroupName(groupName)}
                       </td>
                     </tr>
                     {groupPlayers.map((p) => (

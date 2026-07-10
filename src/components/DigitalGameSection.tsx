@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { RefreshCw, Share2, HelpCircle, Trophy, Sparkles, User, Shield, ArrowRight, Zap, Play, RotateCcw } from 'lucide-react';
 import { db, auth } from '../firebase';
 import { doc, setDoc, collection, onSnapshot } from 'firebase/firestore';
-import { DigitalMatch, UserProfile } from '../types';
+import { DigitalMatch, UserProfile, formatGroupName } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 
 // Hand Cricket gestures mapped to emojis & descriptive terms - high density styled
@@ -1270,7 +1270,7 @@ export default function DigitalGameSection({
               <div key={match.id} className="bg-[#1A2238]/80 border border-slate-700 p-4 rounded-xl flex items-center justify-between">
                 <div>
                   <div className="text-xs font-mono text-slate-400 uppercase tracking-wider mb-1">
-                    {match.stage} {match.group ? `- ${match.group}` : ''} | {match.time}
+                    {match.stage} {match.group ? `- ${formatGroupName(match.group)}` : ''} | {match.time}
                   </div>
                   <div className="font-bold text-slate-200">
                     <span className={match.player1 === playerTeamName ? 'text-orange-400 font-black' : ''}>{match.player1}</span>

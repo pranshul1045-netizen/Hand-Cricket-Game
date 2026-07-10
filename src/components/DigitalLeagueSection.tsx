@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Plus, Trophy, Shield, Search, ArrowRight, User, Trash2 } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot } from 'firebase/firestore';
-import { DigitalTournamentMatch, UserProfile } from '../types';
+import { DigitalTournamentMatch, UserProfile, formatGroupName } from '../types';
 
 const getGradientByName = (name: string) => {
   const gradients = [
@@ -344,7 +344,7 @@ export default function DigitalLeagueSection({ userProfile, digitalTournamentMat
                 >
                   {Array.from({ length: 12 }, (_, i) => (
                     <option key={i} value={`Group ${i + 1}`}>
-                      Group {i + 1}
+                      {formatGroupName(`Group ${i + 1}`)}
                     </option>
                   ))}
                 </select>
@@ -408,7 +408,7 @@ export default function DigitalLeagueSection({ userProfile, digitalTournamentMat
                     ? 'bg-purple-500/15 text-purple-400 border-purple-500/30'
                     : 'bg-blue-500/10 text-blue-400 border-blue-500/20'
                 }`}>
-                  {match.stage === 'Group Stage' && match.group ? `${match.stage} - ${match.group}` : (match.stage || 'Group Stage')}
+                  {match.stage === 'Group Stage' && match.group ? `${match.stage} - ${formatGroupName(match.group)}` : (match.stage || 'Group Stage')}
                 </span>
                 <span className={`px-2.5 py-0.5 font-mono font-bold text-[9px] uppercase tracking-wider rounded border ${
                   match.status === 'completed'

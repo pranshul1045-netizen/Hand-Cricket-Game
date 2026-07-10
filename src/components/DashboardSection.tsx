@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Award, Shield, User, Edit3, Save, Flame, Trophy, TrendingUp, Sparkles, Upload, Target, Activity, BarChart2 } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { doc, setDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore';
-import { UserProfile, SchoolMatch, PlayerStanding } from '../types';
+import { UserProfile, SchoolMatch, PlayerStanding, formatGroupName } from '../types';
 
 const AVATAR_PRESETS = [
   { name: 'Red Cap', url: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=120&h=120&q=80' },
@@ -45,6 +45,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
   const [displayName, setDisplayName] = useState('');
   const [battingStyle, setBattingStyle] = useState<'Right-handed' | 'Left-handed'>('Right-handed');
   const [favoriteNumber, setFavoriteNumber] = useState<number>(6);
+  const [teamName, setTeamName] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   // Player Profile Photo States
@@ -114,6 +115,9 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
     auth.currentUser?.email === 'pranshul1045@gamil.com' || 
     auth.currentUser?.uid === 'admin_local' || 
     userProfile?.role === 'admin';
+
+  const isPlayerLogin = !!(userProfile?.uid && userProfile.uid.startsWith('player_'));
+  const playerDocId = isPlayerLogin ? userProfile.uid.replace('player_', '').toLowerCase() : '';
 
   useEffect(() => {
     // Real-time subscribe to custom player profiles
@@ -202,6 +206,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
       setDisplayName(userProfile.displayName || '');
       setBattingStyle(userProfile.battingStyle || 'Right-handed');
       setFavoriteNumber(userProfile.favoriteNumber || 6);
+      setTeamName(userProfile.teamName || '');
     }
   }, [userProfile]);
 
@@ -340,6 +345,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
           name: displayName.trim(),
           battingStyle,
           favoriteNumber,
+          teamName: teamName.trim() || `${displayName.trim()} XI`,
           updatedAt: new Date().toISOString()
         }, { merge: true });
 
@@ -348,7 +354,8 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
           ...userProfile,
           displayName: displayName.trim(),
           battingStyle,
-          favoriteNumber
+          favoriteNumber,
+          teamName: teamName.trim() || `${displayName.trim()} XI`
         };
         localStorage.setItem('hcl_local_guest_profile', JSON.stringify(updatedProfile));
         if (onUpdateProfile) {
@@ -363,6 +370,7 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
           role: userProfile?.role || 'user',
           battingStyle,
           favoriteNumber,
+          teamName: teamName.trim() || `${displayName.trim()} XI`,
           createdAt: userProfile?.createdAt || new Date().toISOString()
         };
         localStorage.setItem('hcl_local_guest_profile', JSON.stringify(updatedProfile));
@@ -376,7 +384,8 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
         await updateDoc(userRef, {
           displayName,
           battingStyle,
-          favoriteNumber
+          favoriteNumber,
+          teamName: teamName.trim()
         });
         setIsEditing(false);
       }
@@ -1007,6 +1016,18 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                     />
                   </div>
 
+                  {/* Team Name */}
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-400 block">My Team Name</label>
+                    <input
+                      type="text"
+                      value={teamName}
+                      onChange={(e) => setTeamName(e.target.value)}
+                      className="w-full bg-[#1A2238] border border-slate-700 px-3 py-2 rounded-lg text-sm text-slate-100 focus:outline-none focus:border-orange-500"
+                      placeholder="E.g. Kings XI, Knight Riders"
+                    />
+                  </div>
+
                   {/* Batting Stance */}
                   <div className="space-y-1">
                     <label className="font-bold text-slate-400 block">Batting Stance</label>
@@ -1097,6 +1118,18 @@ export default function DashboardSection({ userProfile, schoolMatches, onStartGa
                   </div>
 
                   <div className="divide-y divide-slate-800 text-xs pt-2">
+                    <div className="py-2.5 flex justify-between items-center">
+                      <span className="text-slate-400 font-medium">Team Name</span>
+                      <span className="font-bold text-orange-400 font-mono text-xs">{userProfile?.teamName || `${userProfile?.displayName || 'Player'} XI`}</span>
+                    </div>
+                    {(userProfile?.group || isPlayerLogin) && (
+                      <div className="py-2.5 flex justify-between items-center">
+                        <span className="text-slate-400 font-medium">Tournament Group</span>
+                        <span className="font-mono font-bold text-blue-400 text-xs bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
+                          {formatGroupName(userProfile?.group || 'Not Assigned')}
+                        </span>
+                      </div>
+                    )}
                     <div className="py-2.5 flex justify-between items-center">
                       <span className="text-slate-400 font-medium">Batting Stance</span>
                       <span className="font-bold text-slate-200">{userProfile?.battingStyle || 'Right-handed'}</span>

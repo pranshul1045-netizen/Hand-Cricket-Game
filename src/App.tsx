@@ -211,7 +211,7 @@ export default function App() {
           if (stored) {
             try {
               const profile = JSON.parse(stored);
-              setUser({ uid: 'guest_local', isAnonymous: true, displayName: profile.displayName });
+              setUser({ uid: profile.uid || 'guest_local', isAnonymous: true, displayName: profile.displayName });
               setUserProfile(profile);
             } catch (e) {
               // ignore
@@ -292,12 +292,42 @@ export default function App() {
       setLoadingTeamName(false);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setPlayerTeamName(data.teamName || '');
+        const dbTeamName = data.teamName || '';
+        const dbGroup = data.group || 'Unknown';
+        
+        setPlayerTeamName(dbTeamName);
+        
+        setUserProfile((prev) => {
+          if (!prev) return null;
+          
+          // Only update if there is a genuine change to avoid React trigger cascades
+          if (
+            prev.teamName === dbTeamName &&
+            prev.group === dbGroup &&
+            prev.displayName === (data.name || prev.displayName) &&
+            prev.battingStyle === (data.battingStyle || prev.battingStyle) &&
+            prev.favoriteNumber === (data.favoriteNumber || prev.favoriteNumber)
+          ) {
+            return prev;
+          }
+          
+          const updatedProfile = {
+            ...prev,
+            displayName: data.name || prev.displayName,
+            battingStyle: data.battingStyle || prev.battingStyle,
+            favoriteNumber: data.favoriteNumber || prev.favoriteNumber,
+            teamName: dbTeamName || prev.teamName || `${data.name || prev.displayName} XI`,
+            group: dbGroup,
+          };
+          
+          localStorage.setItem('hcl_local_guest_profile', JSON.stringify(updatedProfile));
+          return updatedProfile;
+        });
       } else {
         setPlayerTeamName('');
       }
     }, (err) => {
-      console.error("Error fetching player team name:", err);
+      console.error("Error fetching/syncing player profile:", err);
       setLoadingTeamName(false);
     });
     return () => unsub();
@@ -506,6 +536,8 @@ export default function App() {
             role: isSelfAdmin ? 'admin' : 'user',
             battingStyle: (data.battingStyle || 'Right-handed') as 'Right-handed' | 'Left-handed',
             favoriteNumber: data.favoriteNumber || 6,
+            teamName: data.teamName || `${data.name || username} XI`,
+            group: data.group || 'Unknown',
             createdAt: data.createdAt || new Date().toISOString()
           };
           

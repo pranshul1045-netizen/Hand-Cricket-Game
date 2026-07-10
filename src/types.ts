@@ -8,6 +8,7 @@ export interface UserProfile {
   favoriteNumber?: number; // 1-6
   createdAt: any; // Timestamp or date string
   teamName?: string;
+  group?: string;
 }
 
 export interface SchoolMatch {
@@ -123,4 +124,15 @@ export interface LeagueUpdate {
   creatorId: string;
   creatorName: string;
   createdAt: string;
+}
+
+export function formatGroupName(group: string | undefined): string {
+  if (!group) return 'Unknown';
+  if (group.includes('(')) return group; // already formatted
+  const num = parseInt(group.replace(/\D/g, ''), 10);
+  if (num >= 1 && num <= 12) {
+    const letter = String.fromCharCode(64 + num); // 1 -> A, 2 -> B, ..., 12 -> L
+    return `Group ${num} (${letter})`;
+  }
+  return group;
 }
