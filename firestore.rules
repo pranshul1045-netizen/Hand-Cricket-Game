@@ -53,7 +53,7 @@ service cloud.firestore {
     }
 
     function isValidDigitalMatch(data) {
-      return data.playerUid is string && data.playerUid == request.auth.uid
+      return data.playerUid is string && (data.playerUid == 'guest_local' || data.playerUid.matches('^player_.*') || (isSignedIn() && data.playerUid == request.auth.uid))
         && data.playerName is string && data.playerName.size() > 0 && data.playerName.size() <= 100
         && data.opponentName is string && data.opponentName.size() > 0 && data.opponentName.size() <= 100
         && (data.playerRuns is int || data.playerRuns is float) && data.playerRuns >= 0 && data.playerRuns <= 1000
@@ -134,11 +134,11 @@ service cloud.firestore {
 
     match /digitalTournamentMatches/{matchId} {
       allow read: if true;
-      allow create: if isSignedIn() && isValidId(matchId) && isValidDigitalTournamentMatch(request.resource.data) && request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 50;
-      allow update: if isSignedIn() && isValidDigitalTournamentMatch(request.resource.data)
+      allow create: if isValidId(matchId) && isValidDigitalTournamentMatch(request.resource.data) && request.resource.data.createdAt is string && request.resource.data.createdAt.size() <= 50;
+      allow update: if isValidDigitalTournamentMatch(request.resource.data)
         && request.resource.data.creatorId == resource.data.creatorId
         && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAdmin() || (isSignedIn() && resource.data.creatorId == request.auth.uid);
+      allow delete: if isAdmin() || resource.data.creatorId == 'admin_local' || (isSignedIn() && resource.data.creatorId == request.auth.uid);
     }
 
     match /schoolMatches/{matchId} {
@@ -152,13 +152,13 @@ service cloud.firestore {
 
     match /digitalMatches/{matchId} {
       allow read: if true;
-      allow create: if isSignedIn() && isValidId(matchId) && isValidDigitalMatch(request.resource.data);
+      allow create: if isValidId(matchId) && isValidDigitalMatch(request.resource.data);
       allow update: if false; // Digital matches are immutable after played
-      allow delete: if isAdmin() || (isSignedIn() && resource.data.playerUid == request.auth.uid);
+      allow delete: if isAdmin() || resource.data.playerUid == 'guest_local' || resource.data.playerUid.matches('^player_.*') || (isSignedIn() && resource.data.playerUid == request.auth.uid);
     }
 
     match /standings/{standingId} {
-      allow read: if isSignedIn();
+      allow read: if true;
       allow write: if isAdmin();
     }
 

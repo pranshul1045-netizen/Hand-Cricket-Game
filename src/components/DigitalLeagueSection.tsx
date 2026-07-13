@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Trophy, Shield, Search, ArrowRight, User, Trash2 } from 'lucide-react';
+import { Calendar, Plus, Trophy, Shield, Search, ArrowRight, User, Trash2, Gamepad2, Flame, Users } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot } from 'firebase/firestore';
 import { DigitalTournamentMatch, UserProfile, formatGroupName } from '../types';
@@ -21,6 +21,22 @@ const getGradientByName = (name: string) => {
   return gradients[index];
 };
 
+export function formatTimeTo12Hour(timeStr?: string): string {
+  if (!timeStr) return '';
+  if (timeStr.toLowerCase().includes('am') || timeStr.toLowerCase().includes('pm')) {
+    return timeStr;
+  }
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1];
+  if (isNaN(hours)) return timeStr;
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  return `${hours}:${minutes} ${ampm}`;
+}
+
 interface DigitalLeagueSectionProps {
   userProfile: UserProfile | null;
   digitalTournamentMatches: DigitalTournamentMatch[];
@@ -28,32 +44,115 @@ interface DigitalLeagueSectionProps {
   digitalTournamentLocked?: boolean;
   onAddMatch?: (newMatch: DigitalTournamentMatch) => void;
   onDeleteMatch?: (matchId: string) => void;
+  setActiveTab?: (tab: 'dashboard' | 'game' | 'league' | 'rules' | 'updates' | 'digital_home' | 'digital_league') => void;
 }
 
-export default function DigitalLeagueSection({ userProfile, digitalTournamentMatches, isAdmin, digitalTournamentLocked, onAddMatch, onDeleteMatch }: DigitalLeagueSectionProps) {
+export default function DigitalLeagueSection({ 
+  userProfile, 
+  digitalTournamentMatches, 
+  isAdmin, 
+  digitalTournamentLocked, 
+  onAddMatch, 
+  onDeleteMatch,
+  setActiveTab 
+}: DigitalLeagueSectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // Player Profile Photos
+  // Player Profiles
   const [playerProfiles, setPlayerProfiles] = useState<Record<string, string>>({});
+  const [fullProfiles, setFullProfiles] = useState<any[]>([]);
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'playerProfiles'), (snapshot) => {
       const profiles: Record<string, string> = {};
+      const full: any[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data();
         if (data.photoURL) {
           profiles[docSnap.id] = data.photoURL; // doc.id is lowercased name
         }
+        full.push({
+          id: docSnap.id,
+          ...data
+        });
       });
       setPlayerProfiles(profiles);
+      setFullProfiles(full);
     }, (err) => {
       console.error("Error loading profiles in DigitalLeagueSection:", err);
       handleFirestoreError(err, OperationType.LIST, 'playerProfiles');
     });
     return () => unsub();
   }, []);
+
+  // 1-second interval for real-time timer
+  const [nowMs, setNowMs] = useState(Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Helper to lookup player profiles and check online status
+  const getPlayerProfileByTeamOrName = (identifier: string) => {
+    if (!identifier) return null;
+    const idLow = identifier.toLowerCase().trim();
+    return fullProfiles.find(p => {
+      const pNameLow = (p.name || '').toLowerCase().trim();
+      const pTeamLow = (p.teamName || '').toLowerCase().trim();
+      return pNameLow === idLow || pTeamLow === idLow;
+    });
+  };
+
+  const isPlayerOnline = (lastActive: string | null) => {
+    if (!lastActive) return false;
+    try {
+      const diff = Date.now() - new Date(lastActive).getTime();
+      return diff < 30000; // 30 seconds
+    } catch {
+      return false;
+    }
+  };
+
+  const playerTeamName = userProfile?.teamName || '';
+  const myPlayerName = userProfile?.displayName || '';
+  
+  const isMatchPlayer = (match: DigitalTournamentMatch) => {
+    if (!playerTeamName && !myPlayerName) return false;
+    const p1Low = match.player1.toLowerCase().trim();
+    const p2Low = match.player2.toLowerCase().trim();
+    const myTeamLow = playerTeamName.toLowerCase().trim();
+    const myNameLow = myPlayerName.toLowerCase().trim();
+    
+    return p1Low === myTeamLow || p2Low === myTeamLow || p1Low === myNameLow || p2Low === myNameLow;
+  };
+
+  const formatCountdown = (matchTimeStr: string, matchDateStr: string) => {
+    try {
+      const matchTimeMs = new Date(`${matchDateStr}T${matchTimeStr}:00`).getTime();
+      const diffMs = matchTimeMs - nowMs;
+      if (diffMs <= 0) {
+        const elapsedSec = Math.floor(Math.abs(diffMs) / 1000);
+        const mins = Math.floor(elapsedSec / 60);
+        const secs = elapsedSec % 60;
+        return {
+          status: 'live',
+          text: `LIVE • ${mins}m ${secs}s elapsed`
+        };
+      } else {
+        const totalSec = Math.floor(diffMs / 1000);
+        const mins = Math.floor(totalSec / 60);
+        const secs = totalSec % 60;
+        return {
+          status: 'upcoming',
+          text: `Starts in ${mins}:${String(secs).padStart(2, '0')}`
+        };
+      }
+    } catch {
+      return { status: 'unknown', text: '' };
+    }
+  };
 
   // Form State
   const [player1, setPlayer1] = useState('');
@@ -68,7 +167,19 @@ export default function DigitalLeagueSection({ userProfile, digitalTournamentMat
   const [group, setGroup] = useState<string>('Group 1');
   const [matchDate, setMatchDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [matchTime, setMatchTime] = useState<string>('12:00');
+  const [matchHour, setMatchHour] = useState<string>('12');
+  const [matchMinute, setMatchMinute] = useState<string>('00');
+  const [matchAmPm, setMatchAmPm] = useState<'AM' | 'PM'>('PM');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Synchronize 12-hour selectors with matchTime state string for firestore
+  useEffect(() => {
+    let hr = parseInt(matchHour, 10);
+    if (matchAmPm === 'PM' && hr < 12) hr += 12;
+    if (matchAmPm === 'AM' && hr === 12) hr = 0;
+    const hrStr = String(hr).padStart(2, '0');
+    setMatchTime(`${hrStr}:${matchMinute}`);
+  }, [matchHour, matchMinute, matchAmPm]);
 
   // Save new official digital tournament match
   const handleAddMatch = async (e: React.FormEvent) => {
@@ -117,6 +228,9 @@ export default function DigitalLeagueSection({ userProfile, digitalTournamentMat
       setPlayer1Conceded(0);
       setPlayer2Conceded(0);
       setStage('Group Stage');
+      setMatchHour('12');
+      setMatchMinute('00');
+      setMatchAmPm('PM');
       setShowAddForm(false);
     } catch (err) {
       console.error("Error writing digital tournament match scorecard: ", err);
@@ -151,6 +265,20 @@ export default function DigitalLeagueSection({ userProfile, digitalTournamentMat
     return match.player1.toLowerCase().includes(q) || match.player2.toLowerCase().includes(q);
   });
 
+  // Filter scheduled matches starting in 5 minutes (or currently in progress)
+  const lobbyMatches = (digitalTournamentMatches || []).filter(match => {
+    if (match.status !== 'scheduled') return false;
+    if (!match.date || !match.time) return false;
+    try {
+      const matchTimeMs = new Date(`${match.date}T${match.time}:00`).getTime();
+      if (isNaN(matchTimeMs)) return false;
+      // Show match if it's within 5 minutes of starting, or up to 60 minutes after start time
+      return nowMs >= matchTimeMs - 5 * 60 * 1000 && nowMs <= matchTimeMs + 60 * 60 * 1000;
+    } catch {
+      return false;
+    }
+  });
+
   return (
     <div id="league-matches-section" className="space-y-6">
       
@@ -165,6 +293,147 @@ export default function DigitalLeagueSection({ userProfile, digitalTournamentMat
             <span className="text-slate-400 font-sans mt-0.5 block">
               New scorecards are locked for the current stage. Even administrators cannot make changes at this time.
             </span>
+          </div>
+        </div>
+      )}
+
+      {/* Live Match Lobby Banner (Starting within 5 min / ongoing) */}
+      {lobbyMatches.length > 0 && (
+        <div className="bg-gradient-to-r from-orange-500/10 via-purple-600/10 to-pink-500/10 border border-orange-500/40 rounded-2xl p-6 shadow-2xl relative overflow-hidden space-y-4">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-orange-500/10 rounded-full blur-3xl transform translate-x-12 -translate-y-12"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-600/10 rounded-full blur-3xl transform -translate-x-12 translate-y-12"></div>
+          
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h3 className="font-display font-black text-lg text-orange-400 tracking-tight flex items-center gap-2 uppercase">
+                <Flame className="w-5 h-5 text-orange-500 animate-pulse" /> Live Match Lobby
+              </h3>
+              <p className="text-slate-400 text-xs font-medium">
+                Official tournament matches starting now or within the next 5 minutes. Players, enter the arena to play!
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2 bg-[#1A2238]/60 border border-slate-700/50 px-3 py-1.5 rounded-lg">
+              <Users className="w-4 h-4 text-slate-400" />
+              <span className="font-mono text-xs text-slate-300 font-bold">{lobbyMatches.length} Match{lobbyMatches.length > 1 ? 'es' : ''} Active</span>
+            </div>
+          </div>
+
+          <div className="relative z-10 grid grid-cols-1 gap-4">
+            {lobbyMatches.map(match => {
+              const countdown = formatCountdown(match.time || '', match.date || '');
+              const p1Profile = getPlayerProfileByTeamOrName(match.player1);
+              const p2Profile = getPlayerProfileByTeamOrName(match.player2);
+              const p1Online = p1Profile ? isPlayerOnline(p1Profile.lastActive) : false;
+              const p2Online = p2Profile ? isPlayerOnline(p2Profile.lastActive) : false;
+              const amIInMatch = isMatchPlayer(match);
+
+              return (
+                <div key={match.id} className="bg-[#111827]/90 border border-slate-700/80 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-orange-500/30 transition-all duration-300">
+                  <div className="flex-1 space-y-3">
+                    {/* Stage Badge & Countdown */}
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="px-2.5 py-0.5 bg-orange-500/10 border border-orange-500/20 rounded font-mono text-[10px] font-bold uppercase tracking-wider text-orange-400">
+                        {match.stage === 'Group Stage' && match.group ? `${match.stage} - ${formatGroupName(match.group)}` : (match.stage || 'Group Stage')}
+                      </span>
+                      <span className={`px-2.5 py-0.5 rounded font-mono text-[10px] font-black uppercase tracking-wider flex items-center gap-1 ${
+                        countdown.status === 'live' 
+                          ? 'bg-red-500/15 text-red-400 border border-red-500/20 animate-pulse' 
+                          : 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+                      }`}>
+                        <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
+                        {countdown.text}
+                      </span>
+                    </div>
+
+                    {/* Players & Status Row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-11 items-center gap-3">
+                      {/* Player 1 */}
+                      <div className="sm:col-span-5 flex items-center gap-3 bg-[#1A2238]/40 border border-slate-800/80 p-2.5 rounded-lg">
+                        <div className="relative">
+                          {p1Profile?.photoURL ? (
+                            <img src={p1Profile.photoURL} alt={match.player1} className="w-8 h-8 rounded-full object-cover border border-slate-700" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-[#1A2238] border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400">
+                              {match.player1.substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#111827] ${p1Online ? 'bg-emerald-500' : 'bg-slate-500'}`} title={p1Online ? 'Online' : 'Offline'}></span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-200 text-sm truncate flex items-center gap-1.5">
+                            {match.player1}
+                            {userProfile?.teamName === match.player1 && <span className="text-[10px] bg-orange-500/20 text-orange-400 px-1 py-0.2 rounded font-mono">YOU</span>}
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
+                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${p1Online ? 'bg-emerald-500' : 'bg-slate-500'}`}></span>
+                            {p1Online ? 'Ready / Online' : 'Offline'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* VS Indicator */}
+                      <div className="sm:col-span-1 text-center font-mono font-bold text-xs text-slate-500 py-1 sm:py-0">
+                        VS
+                      </div>
+
+                      {/* Player 2 */}
+                      <div className="sm:col-span-5 flex items-center gap-3 bg-[#1A2238]/40 border border-slate-800/80 p-2.5 rounded-lg">
+                        <div className="relative">
+                          {p2Profile?.photoURL ? (
+                            <img src={p2Profile.photoURL} alt={match.player2} className="w-8 h-8 rounded-full object-cover border border-slate-700" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-[#1A2238] border border-slate-700 flex items-center justify-center text-xs font-bold text-slate-400">
+                              {match.player2.substring(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <span className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#111827] ${p2Online ? 'bg-emerald-500' : 'bg-slate-500'}`} title={p2Online ? 'Online' : 'Offline'}></span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-slate-200 text-sm truncate flex items-center gap-1.5">
+                            {match.player2}
+                            {userProfile?.teamName === match.player2 && <span className="text-[10px] bg-orange-500/20 text-orange-400 px-1 py-0.2 rounded font-mono">YOU</span>}
+                          </div>
+                          <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1">
+                            <span className={`inline-block w-1.5 h-1.5 rounded-full ${p2Online ? 'bg-emerald-500' : 'bg-slate-500'}`}></span>
+                            {p2Online ? 'Ready / Online' : 'Offline'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions Area */}
+                  <div className="flex md:flex-col items-stretch justify-center gap-2 min-w-[140px] md:border-l md:border-slate-800 md:pl-4">
+                    {amIInMatch ? (
+                      <button
+                        onClick={() => {
+                          if (setActiveTab) {
+                            setActiveTab('game');
+                          }
+                        }}
+                        className="w-full bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white font-display font-black text-xs uppercase py-3 px-4 rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-orange-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                      >
+                        <Gamepad2 className="w-4 h-4 text-white animate-bounce" />
+                        Play Live Duel
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          if (setActiveTab) {
+                            setActiveTab('game');
+                          }
+                        }}
+                        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-[10px] font-bold uppercase py-2.5 px-3 rounded-lg flex items-center justify-center gap-1.5 border border-slate-700 transition-all cursor-pointer"
+                      >
+                        <ArrowRight className="w-3.5 h-3.5" />
+                        Enter Game Arena
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -308,12 +577,44 @@ export default function DigitalLeagueSection({ userProfile, digitalTournamentMat
             {/* Match Time */}
             <div className="space-y-1 col-span-2 md:col-span-1">
               <label className="font-bold text-slate-400 block">Match Time</label>
-              <input
-                type="time"
-                value={matchTime}
-                onChange={(e) => setMatchTime(e.target.value)}
-                className="w-full bg-[#1A2238] border border-slate-700 px-3 py-1.5 rounded-lg text-sm font-mono text-slate-100 focus:outline-none focus:border-orange-500"
-              />
+              <div className="flex items-center gap-1">
+                {/* Hour */}
+                <select
+                  value={matchHour}
+                  onChange={(e) => setMatchHour(e.target.value)}
+                  className="w-1/3 bg-[#1A2238] border border-slate-700 px-1 py-1.5 rounded-lg text-sm font-mono text-slate-100 focus:outline-none focus:border-orange-500 cursor-pointer"
+                  title="Hour"
+                >
+                  {Array.from({ length: 12 }, (_, i) => String(i + 1)).map(h => (
+                    <option key={h} value={h}>{h}</option>
+                  ))}
+                </select>
+
+                <span className="text-slate-500 font-bold font-mono px-0.5">:</span>
+
+                {/* Minute */}
+                <select
+                  value={matchMinute}
+                  onChange={(e) => setMatchMinute(e.target.value)}
+                  className="w-1/3 bg-[#1A2238] border border-slate-700 px-1 py-1.5 rounded-lg text-sm font-mono text-slate-100 focus:outline-none focus:border-orange-500 cursor-pointer"
+                  title="Minute"
+                >
+                  {Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0')).map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+
+                {/* AM/PM */}
+                <select
+                  value={matchAmPm}
+                  onChange={(e: any) => setMatchAmPm(e.target.value)}
+                  className="w-1/3 bg-[#1A2238] border border-slate-700 px-1 py-1.5 rounded-lg text-sm font-mono text-slate-100 focus:outline-none focus:border-orange-500 cursor-pointer"
+                  title="AM/PM"
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
             </div>
 
             {/* Match Stage */}
@@ -398,7 +699,7 @@ export default function DigitalLeagueSection({ userProfile, digitalTournamentMat
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-800 text-xs">
               <div className="flex items-center gap-1.5 text-slate-400">
                 <Calendar className="w-3.5 h-3.5" />
-                <span className="font-mono">{match.date || 'Digital Tournament Match'} {match.time && `| ${match.time}`}</span>
+                <span className="font-mono">{match.date || 'Digital Tournament Match'} {match.time && `| ${formatTimeTo12Hour(match.time)}`}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className={`px-2.5 py-0.5 font-mono font-bold text-[9px] uppercase tracking-wider rounded border ${

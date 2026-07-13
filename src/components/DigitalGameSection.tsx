@@ -33,6 +33,22 @@ const comments = {
   ]
 };
 
+export function formatTimeTo12Hour(timeStr?: string): string {
+  if (!timeStr) return '';
+  if (timeStr.toLowerCase().includes('am') || timeStr.toLowerCase().includes('pm')) {
+    return timeStr;
+  }
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return timeStr;
+  let hours = parseInt(parts[0], 10);
+  const minutes = parts[1];
+  if (isNaN(hours)) return timeStr;
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // the hour '0' should be '12'
+  return `${hours}:${minutes} ${ampm}`;
+}
+
 const isPlayerOnline = (lastActive: string | null) => {
   if (!lastActive) return false;
   try {
@@ -771,7 +787,7 @@ export default function DigitalGameSection({
     const matchId = `digital_${Date.now()}`;
     const digitalMatchPayload: DigitalMatch = {
       id: matchId,
-      playerUid: auth.currentUser!.uid,
+      playerUid: auth.currentUser?.uid || userProfile?.uid || 'guest_local',
       playerName: userProfile?.displayName || 'Player',
       playerTeamName: playerTeamName || undefined,
       opponentName: opponentType === 'registered' && selectedOpponent 
@@ -1270,7 +1286,7 @@ export default function DigitalGameSection({
               <div key={match.id} className="bg-[#1A2238]/80 border border-slate-700 p-4 rounded-xl flex items-center justify-between">
                 <div>
                   <div className="text-xs font-mono text-slate-400 uppercase tracking-wider mb-1">
-                    {match.stage} {match.group ? `- ${formatGroupName(match.group)}` : ''} | {match.time}
+                    {match.stage} {match.group ? `- ${formatGroupName(match.group)}` : ''} | {formatTimeTo12Hour(match.time)}
                   </div>
                   <div className="font-bold text-slate-200">
                     <span className={match.player1 === playerTeamName ? 'text-orange-400 font-black' : ''}>{match.player1}</span>

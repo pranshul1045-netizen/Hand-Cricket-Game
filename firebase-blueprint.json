@@ -147,12 +147,41 @@
         "lastTurnTime": { "type": "string" }
       },
       "required": ["challengerId", "challengerName", "targetId", "status", "createdAt", "updatedAt"]
+    },
+    "DigitalTournamentMatch": {
+      "title": "DigitalTournamentMatch",
+      "description": "Tournament match in the HCL Digital Tournament Bracket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "player1": { "type": "string" },
+        "player2": { "type": "string" },
+        "player1Runs": { "type": "integer" },
+        "player2Runs": { "type": "integer" },
+        "player1Balls": { "type": "integer" },
+        "player2Balls": { "type": "integer" },
+        "player1Conceded": { "type": "integer" },
+        "player2Conceded": { "type": "integer" },
+        "winner": { "type": "string" },
+        "status": { "type": "string", "enum": ["completed", "scheduled"] },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "stage": { "type": "string" },
+        "group": { "type": "string" },
+        "creatorId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "player1", "player2", "player1Runs", "player2Runs", "status", "creatorId", "createdAt"]
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User account detail"
+    },
+    "/digitalTournamentMatches/{matchId}": {
+      "schema": "DigitalTournamentMatch",
+      "description": "Matches in the official digital bracket"
     },
     "/schoolMatches/{matchId}": {
       "schema": "SchoolMatch",

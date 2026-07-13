@@ -1158,6 +1158,7 @@ export default function App() {
                   userProfile={userProfile}
                   digitalTournamentMatches={digitalTournamentMatches}
                   isAdmin={isAdmin}
+                  setActiveTab={setActiveTab}
                 />
               )}
               {activeTab === 'rules' && (
