@@ -61,7 +61,7 @@ export default function UpdatesSection({ userProfile, isAdmin }: UpdatesSectionP
       content: content.trim(),
       category,
       date: customDate,
-      creatorId: auth.currentUser?.uid || 'guest_local',
+      creatorId: userProfile?.uid || auth.currentUser?.uid || 'guest_local',
       creatorName: userProfile?.displayName || 'Admin',
       createdAt: new Date().toISOString()
     };

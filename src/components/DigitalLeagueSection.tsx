@@ -202,7 +202,7 @@ export default function DigitalLeagueSection({
       time: matchTime,
       stage,
       group: stage === 'Group Stage' ? group : undefined,
-      creatorId: auth.currentUser?.uid || 'guest_local',
+      creatorId: userProfile?.uid || auth.currentUser?.uid || 'guest_local',
       createdAt: new Date().toISOString()
     };
 

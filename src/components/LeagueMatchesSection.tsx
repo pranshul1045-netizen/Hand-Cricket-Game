@@ -88,7 +88,7 @@ export default function LeagueMatchesSection({ userProfile, schoolMatches, isAdm
       status,
       date: matchDate,
       stage,
-      creatorId: auth.currentUser?.uid || 'guest_local',
+      creatorId: userProfile?.uid || auth.currentUser?.uid || 'guest_local',
       createdAt: new Date().toISOString()
     };
 

@@ -138,7 +138,7 @@ service cloud.firestore {
       allow update: if isValidDigitalTournamentMatch(request.resource.data)
         && request.resource.data.creatorId == resource.data.creatorId
         && request.resource.data.createdAt == resource.data.createdAt;
-      allow delete: if isAdmin() || resource.data.creatorId == 'admin_local' || (isSignedIn() && resource.data.creatorId == request.auth.uid);
+      allow delete: if isAdmin() || resource.data.creatorId == 'admin_local' || resource.data.creatorId == 'guest_local' || resource.data.creatorId == 'demo' || (isSignedIn() && resource.data.creatorId == request.auth.uid);
     }
 
     match /schoolMatches/{matchId} {
