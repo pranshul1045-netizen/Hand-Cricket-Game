@@ -77,15 +77,29 @@ export default function DigitalGameSection({
   const [player1Name, setPlayer1Name] = useState('Player 1');
   const [player2Name, setPlayer2Name] = useState('Player 2');
 
-  const [opponentType, setOpponentType] = useState<'cpu' | 'registered'>('cpu');
+  const [opponentType, setOpponentType] = useState<'cpu' | 'registered' | 'tournament'>('cpu');
   const [registeredPlayers, setRegisteredPlayers] = useState<any[]>([]);
   const [selectedOpponent, setSelectedOpponent] = useState<any | null>(null);
+  const [selectedTournamentMatch, setSelectedTournamentMatch] = useState<any | null>(null);
 
   const [nowMs, setNowMs] = useState(Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 10000);
     return () => clearInterval(timer);
   }, []);
+
+  const myScheduledMatches = (digitalTournamentMatches || []).filter(match => {
+    if (match.status !== 'scheduled') return false;
+    const myTeam = playerTeamName || userProfile?.displayName || '';
+    if (!myTeam) return false;
+    return match.player1.toLowerCase() === myTeam.toLowerCase() || match.player2.toLowerCase() === myTeam.toLowerCase();
+  });
+
+  const getTournamentOpponentName = (match: any) => {
+    const myTeam = playerTeamName || userProfile?.displayName || '';
+    if (match.player1.toLowerCase() === myTeam.toLowerCase()) return match.player2;
+    return match.player1;
+  };
 
   const upcomingTournamentMatches = (digitalTournamentMatches || []).filter(match => {
     if (match.status !== 'scheduled') return false;
@@ -128,10 +142,24 @@ export default function DigitalGameSection({
   useEffect(() => {
     if (opponentType === 'registered' && selectedOpponent) {
       setPlayer2Name(`${selectedOpponent.name} (${selectedOpponent.teamName})`);
+    } else if (opponentType === 'tournament' && selectedTournamentMatch) {
+      const oppName = getTournamentOpponentName(selectedTournamentMatch);
+      setPlayer2Name(oppName);
     } else {
       setPlayer2Name(`CPU (${aiDifficulty.toUpperCase()})`);
     }
-  }, [opponentType, selectedOpponent, aiDifficulty]);
+  }, [opponentType, selectedOpponent, selectedTournamentMatch, aiDifficulty]);
+
+  // Auto-select tournament match if none is selected
+  useEffect(() => {
+    if (opponentType === 'tournament') {
+      if (myScheduledMatches.length > 0 && !selectedTournamentMatch) {
+        setSelectedTournamentMatch(myScheduledMatches[0]);
+      }
+    } else {
+      setSelectedTournamentMatch(null);
+    }
+  }, [opponentType, myScheduledMatches, selectedTournamentMatch]);
 
   useEffect(() => {
     if (userProfile) {
@@ -783,6 +811,42 @@ export default function DigitalGameSection({
     const playerRuns = p1Runs;
     const cpuRuns = p2Runs;
     const didPlayerWin = playerRuns > cpuRuns;
+
+    if (opponentType === 'tournament' && selectedTournamentMatch) {
+      const matchId = selectedTournamentMatch.id;
+      const myTeam = playerTeamName || userProfile?.displayName || '';
+      
+      const isMyTeamPlayer1 = selectedTournamentMatch.player1.toLowerCase() === myTeam.toLowerCase();
+      
+      let tournamentWinner: string;
+      if (playerRuns > cpuRuns) {
+        tournamentWinner = isMyTeamPlayer1 ? selectedTournamentMatch.player1 : selectedTournamentMatch.player2;
+      } else if (cpuRuns > playerRuns) {
+        tournamentWinner = isMyTeamPlayer1 ? selectedTournamentMatch.player2 : selectedTournamentMatch.player1;
+      } else {
+        tournamentWinner = 'Tie';
+      }
+
+      const updatedMatchPayload: any = {
+        ...selectedTournamentMatch,
+        status: 'completed',
+        player1Runs: isMyTeamPlayer1 ? playerRuns : cpuRuns,
+        player2Runs: isMyTeamPlayer1 ? cpuRuns : playerRuns,
+        player1Conceded: isMyTeamPlayer1 ? cpuRuns : playerRuns,
+        player2Conceded: isMyTeamPlayer1 ? playerRuns : cpuRuns,
+        winner: tournamentWinner,
+        creatorId: selectedTournamentMatch.creatorId || 'admin_local',
+        createdAt: selectedTournamentMatch.createdAt || new Date().toISOString()
+      };
+
+      try {
+        await setDoc(doc(db, 'digitalTournamentMatches', matchId), updatedMatchPayload);
+        onGameSaved();
+      } catch (err) {
+        console.error("Error saving official digital tournament match scorecard: ", err);
+      }
+      return;
+    }
 
     const matchId = `digital_${Date.now()}`;
     const digitalMatchPayload: DigitalMatch = {
@@ -1442,7 +1506,7 @@ export default function DigitalGameSection({
           <div className="space-y-2">
             <h3 className="font-display font-black text-2xl text-orange-400 tracking-tight uppercase">HCL Digital Arena</h3>
             <p className="text-slate-400 text-sm font-medium">
-              Step onto the virtual pitch! Choose to play against the computer or select another registered player who has declared their team name.
+              Step onto the virtual pitch! Choose to play against the computer, select another registered player for a friendly, or compete in an official tournament match.
             </p>
           </div>
 
@@ -1451,7 +1515,7 @@ export default function DigitalGameSection({
               <label className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
                 Opponent Type
               </label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button
                   type="button"
                   onClick={() => {
@@ -1485,7 +1549,31 @@ export default function DigitalGameSection({
                   }`}
                   title={!hasRegisteredTeam ? "Register your team name under the Dashboard to unlock!" : "Play against other registered players"}
                 >
-                  {hasRegisteredTeam ? '🛡️ Registered Player' : '🔒 Registered Player'}
+                  {hasRegisteredTeam ? '🛡️ Friendly' : '🔒 Friendly'}
+                </button>
+                <button
+                  type="button"
+                  disabled={!hasRegisteredTeam || myScheduledMatches.length === 0}
+                  onClick={() => {
+                    if (!hasRegisteredTeam || myScheduledMatches.length === 0) return;
+                    setOpponentType('tournament');
+                  }}
+                  className={`py-3 rounded-xl text-xs md:text-sm font-semibold border text-center transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    !hasRegisteredTeam || myScheduledMatches.length === 0
+                      ? 'bg-slate-800/20 border-slate-800 text-slate-600 cursor-not-allowed'
+                      : opponentType === 'tournament'
+                        ? 'bg-orange-500/20 border-orange-500/40 text-orange-400 font-black shadow-lg'
+                        : 'bg-[#1A2238] border-slate-700 text-slate-400 hover:border-orange-500/30'
+                  }`}
+                  title={
+                    !hasRegisteredTeam 
+                      ? "Register your team name under the Dashboard to unlock!" 
+                      : myScheduledMatches.length === 0 
+                        ? "No scheduled digital tournament matches found for your team" 
+                        : "Play an official scheduled tournament match"
+                  }
+                >
+                  {hasRegisteredTeam && myScheduledMatches.length > 0 ? '🏆 Tournament' : '🔒 Tournament'}
                 </button>
               </div>
 
@@ -1494,9 +1582,15 @@ export default function DigitalGameSection({
                   ⚠️ <strong>Feature Locked</strong>: The option to play against other registered players is only available once you declare your team name. Please register your team name first!
                 </div>
               )}
+
+              {hasRegisteredTeam && myScheduledMatches.length === 0 && (
+                <div className="mt-2 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs text-amber-300 font-medium leading-relaxed">
+                  📢 <strong>No Scheduled Matches</strong>: You don't have any scheduled digital tournament matches right now. Ask an admin to schedule a match for you to play in the official tournament!
+                </div>
+              )}
             </div>
 
-            {opponentType === 'cpu' ? (
+            {opponentType === 'cpu' && (
               <div className="space-y-2">
                 <label className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">AI Difficulty</label>
                 <div className="grid grid-cols-2 gap-3">
@@ -1524,7 +1618,9 @@ export default function DigitalGameSection({
                   </button>
                 </div>
               </div>
-            ) : (
+            )}
+
+            {opponentType === 'registered' && (
               <div className="space-y-2">
                 <label className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">Select Registered Opponent</label>
                 {registeredPlayers.length === 0 ? (
@@ -1575,13 +1671,75 @@ export default function DigitalGameSection({
                 )}
               </div>
             )}
+
+            {opponentType === 'tournament' && (
+              <div className="space-y-2">
+                <label className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider">Select Scheduled Tournament Match</label>
+                {myScheduledMatches.length === 0 ? (
+                  <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-xs text-red-300 text-center font-medium leading-relaxed">
+                    No scheduled digital tournament matches found for your team ({playerTeamName || userProfile?.displayName}). Admins must schedule a match for you first.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <select
+                        value={selectedTournamentMatch?.id || ''}
+                        onChange={(e) => {
+                          const match = myScheduledMatches.find(m => m.id === e.target.value);
+                          if (match) setSelectedTournamentMatch(match);
+                        }}
+                        className="w-full bg-[#1A2238] border border-slate-700 text-slate-200 py-3.5 px-4 rounded-xl text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-500/50 appearance-none cursor-pointer"
+                      >
+                        {myScheduledMatches.map((match) => {
+                          const oppName = getTournamentOpponentName(match);
+                          return (
+                            <option key={match.id} value={match.id}>
+                              {match.stage} {match.group ? `- ${formatGroupName(match.group)}` : ''}: vs {oppName}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-400">
+                        ▼
+                      </div>
+                    </div>
+
+                    {selectedTournamentMatch && (
+                      <div className="p-3.5 bg-orange-500/10 border border-orange-500/20 rounded-xl text-xs space-y-1.5 text-slate-300">
+                        <div className="flex justify-between">
+                          <span className="font-mono text-orange-400">Tournament Stage:</span>
+                          <span className="font-semibold">{selectedTournamentMatch.stage}</span>
+                        </div>
+                        {selectedTournamentMatch.group && (
+                          <div className="flex justify-between">
+                            <span className="font-mono text-orange-400">Group:</span>
+                            <span className="font-semibold">{formatGroupName(selectedTournamentMatch.group)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between">
+                          <span className="font-mono text-orange-400">Match Date & Time:</span>
+                          <span className="font-semibold">{selectedTournamentMatch.date} | {formatTimeTo12Hour(selectedTournamentMatch.time)}</span>
+                        </div>
+                        <p className="text-[10px] text-orange-300/80 italic mt-2 border-t border-orange-500/10 pt-1.5">
+                          ⚠️ This is an official tournament match. Once completed, your scores will be saved, and tournament standings, Orange Band, and Purple Band will be updated.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <button
             onClick={startToss}
-            disabled={opponentType === 'registered' && registeredPlayers.length === 0}
+            disabled={
+              (opponentType === 'registered' && registeredPlayers.length === 0) ||
+              (opponentType === 'tournament' && myScheduledMatches.length === 0)
+            }
             className={`w-full text-white font-display font-black text-sm uppercase py-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-100 cursor-pointer ${
-              opponentType === 'registered' && registeredPlayers.length === 0
+              (opponentType === 'registered' && registeredPlayers.length === 0) ||
+              (opponentType === 'tournament' && myScheduledMatches.length === 0)
                 ? 'bg-slate-700/50 border border-slate-700 text-slate-500 cursor-not-allowed shadow-none'
                 : 'bg-gradient-to-r from-orange-500 to-red-600 shadow-[0_4px_0_0_#9a3412] active:translate-y-1 active:shadow-none'
             }`}
@@ -1807,7 +1965,11 @@ export default function DigitalGameSection({
                 <p className="text-[10px] font-mono text-slate-400 mb-4 font-bold tracking-wider">
                   {!isPlayerBattingNow 
                     ? '👤 (YOU)' 
-                    : (opponentType === 'registered' && selectedOpponent ? `🛡️ (${selectedOpponent.teamName})` : '🤖 (CPU)')}
+                    : (opponentType === 'registered' && selectedOpponent 
+                        ? `🛡️ (${selectedOpponent.teamName})` 
+                        : opponentType === 'tournament' && selectedTournamentMatch
+                          ? `🏆 (TOURNAMENT)`
+                          : '🤖 (CPU)')}
                 </p>
 
                 {/* Bowler Gesture Circle */}
@@ -1862,7 +2024,11 @@ export default function DigitalGameSection({
                 <p className="text-[10px] font-mono text-slate-400 mb-4 font-bold tracking-wider">
                   {isPlayerBattingNow 
                     ? '👤 (YOU)' 
-                    : (opponentType === 'registered' && selectedOpponent ? `🛡️ (${selectedOpponent.teamName})` : '🤖 (CPU)')}
+                    : (opponentType === 'registered' && selectedOpponent 
+                        ? `🛡️ (${selectedOpponent.teamName})` 
+                        : opponentType === 'tournament' && selectedTournamentMatch
+                          ? `🏆 (TOURNAMENT)`
+                          : '🤖 (CPU)')}
                 </p>
 
                 {/* Batter Gesture Circle */}
@@ -2029,12 +2195,14 @@ export default function DigitalGameSection({
 
           {/* Rematch / Home controls */}
           <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <button
-              onClick={startToss}
-              className="flex-grow py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white hover:brightness-105 active:translate-y-0.5 transition-all duration-100 rounded-xl font-display font-black text-xs uppercase tracking-wide flex items-center justify-center gap-1.5 shadow-[0_3px_0_0_#9a3412] cursor-pointer"
-            >
-              <RotateCcw className="w-4 h-4" /> Rematch
-            </button>
+            {opponentType !== 'tournament' && (
+              <button
+                onClick={startToss}
+                className="flex-grow py-3 bg-gradient-to-r from-orange-500 to-red-600 text-white hover:brightness-105 active:translate-y-0.5 transition-all duration-100 rounded-xl font-display font-black text-xs uppercase tracking-wide flex items-center justify-center gap-1.5 shadow-[0_3px_0_0_#9a3412] cursor-pointer"
+              >
+                <RotateCcw className="w-4 h-4" /> Rematch
+              </button>
+            )}
             <button
               onClick={() => {
                 setPhase('setup');
