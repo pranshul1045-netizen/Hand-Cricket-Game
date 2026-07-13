@@ -90,20 +90,50 @@ export default function DigitalGameSection({
 
   const myScheduledMatches = (digitalTournamentMatches || []).filter(match => {
     if (match.status !== 'scheduled') return false;
-    const myTeam = playerTeamName || userProfile?.displayName || '';
-    if (!myTeam) return false;
-    return match.player1.toLowerCase() === myTeam.toLowerCase() || match.player2.toLowerCase() === myTeam.toLowerCase();
+    const myTeam = playerTeamName || '';
+    const myName = userProfile?.displayName || '';
+    
+    const p1Low = match.player1.toLowerCase().trim();
+    const p2Low = match.player2.toLowerCase().trim();
+    const myTeamLow = myTeam.toLowerCase().trim();
+    const myNameLow = myName.toLowerCase().trim();
+    
+    return (
+      (myTeamLow && (p1Low === myTeamLow || p2Low === myTeamLow)) ||
+      (myNameLow && (p1Low === myNameLow || p2Low === myNameLow))
+    );
   });
 
   const getTournamentOpponentName = (match: any) => {
-    const myTeam = playerTeamName || userProfile?.displayName || '';
-    if (match.player1.toLowerCase() === myTeam.toLowerCase()) return match.player2;
+    const myTeam = playerTeamName || '';
+    const myName = userProfile?.displayName || '';
+    
+    const p1Low = match.player1.toLowerCase().trim();
+    const myTeamLow = myTeam.toLowerCase().trim();
+    const myNameLow = myName.toLowerCase().trim();
+    
+    if (p1Low === myTeamLow || p1Low === myNameLow) {
+      return match.player2;
+    }
     return match.player1;
   };
 
   const upcomingTournamentMatches = (digitalTournamentMatches || []).filter(match => {
     if (match.status !== 'scheduled') return false;
-    if (!playerTeamName || (match.player1 !== playerTeamName && match.player2 !== playerTeamName)) return false;
+    
+    const myTeam = playerTeamName || '';
+    const myName = userProfile?.displayName || '';
+    
+    const p1Low = match.player1.toLowerCase().trim();
+    const p2Low = match.player2.toLowerCase().trim();
+    const myTeamLow = myTeam.toLowerCase().trim();
+    const myNameLow = myName.toLowerCase().trim();
+    
+    const isMyMatch = (
+      (myTeamLow && (p1Low === myTeamLow || p2Low === myTeamLow)) ||
+      (myNameLow && (p1Low === myNameLow || p2Low === myNameLow))
+    );
+    if (!isMyMatch) return false;
     if (!match.date || !match.time) return false;
     
     const matchTimeMs = new Date(`${match.date}T${match.time}:00`).getTime();
@@ -814,9 +844,14 @@ export default function DigitalGameSection({
 
     if (opponentType === 'tournament' && selectedTournamentMatch) {
       const matchId = selectedTournamentMatch.id;
-      const myTeam = playerTeamName || userProfile?.displayName || '';
+      const myTeam = playerTeamName || '';
+      const myName = userProfile?.displayName || '';
       
-      const isMyTeamPlayer1 = selectedTournamentMatch.player1.toLowerCase() === myTeam.toLowerCase();
+      const p1Low = selectedTournamentMatch.player1.toLowerCase().trim();
+      const myTeamLow = myTeam.toLowerCase().trim();
+      const myNameLow = myName.toLowerCase().trim();
+      
+      const isMyTeamPlayer1 = (p1Low === myTeamLow || p1Low === myNameLow);
       
       let tournamentWinner: string;
       if (playerRuns > cpuRuns) {
