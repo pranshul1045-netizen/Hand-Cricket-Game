@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Trophy, Gamepad2, BookOpen, Sparkles, LogIn, LogOut, 
   User, Loader2, Calendar, ShieldAlert, CheckCircle2, Megaphone, Lock,
-  Settings, X, Edit3, Save
+  Settings, X, Edit3, Save, ArrowRight, Zap
 } from 'lucide-react';
 import { auth, db, handleFirestoreError, OperationType } from './firebase';
 import { 
@@ -138,6 +138,8 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'game' | 'league' | 'rules' | 'updates' | 'digital_home' | 'digital_league'>('dashboard');
   const [tournamentType, setTournamentType] = useState<'schoolyard' | 'digital' | 'registration'>('schoolyard');
+  const [allPlayerProfiles, setAllPlayerProfiles] = useState<any[]>([]);
+  const [preselectedTournamentMatchId, setPreselectedTournamentMatchId] = useState<string | null>(null);
 
   // Login states
   const [loginMode, setLoginMode] = useState<'guest' | 'admin'>('guest');
@@ -342,6 +344,127 @@ export default function App() {
     });
     return () => unsubLock();
   }, []);
+
+  // Listen to all player profiles in real-time
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'playerProfiles'), (snapshot) => {
+      const list: any[] = [];
+      snapshot.forEach((docSnap) => {
+        list.push({ id: docSnap.id, ...docSnap.data() });
+      });
+      setAllPlayerProfiles(list);
+    }, (err) => {
+      console.error("Error loading profiles in App.tsx:", err);
+    });
+    return () => unsub();
+  }, []);
+
+  // Helper for checking if player is online
+  const isPlayerOnline = (lastActive: string | null) => {
+    if (!lastActive) return false;
+    try {
+      const diff = Date.now() - new Date(lastActive).getTime();
+      return diff < 30000; // 30 seconds
+    } catch {
+      return false;
+    }
+  };
+
+  // Helper to resolve player identifier to profile
+  const getPlayerProfileByTeamOrName = (identifier: string) => {
+    if (!identifier) return null;
+    const idLow = identifier.toLowerCase().trim();
+    return allPlayerProfiles.find(p => {
+      const pNameLow = (p.name || '').toLowerCase().trim();
+      const pTeamLow = (p.teamName || '').toLowerCase().trim();
+      return pNameLow === idLow || pTeamLow === idLow;
+    });
+  };
+
+  // Find if there is an active match for the current user that is live
+  const activeIncomingMatch = useMemo(() => {
+    if (!playerTeamName && !userProfile?.displayName) return null;
+    const now = Date.now();
+    const myTeam = playerTeamName || '';
+    const myName = userProfile?.displayName || '';
+    
+    return digitalTournamentMatches.find(match => {
+      if (match.status !== 'scheduled') return false;
+      if (!match.date || !match.time) return false;
+      
+      const p1Low = match.player1.toLowerCase().trim();
+      const p2Low = match.player2.toLowerCase().trim();
+      const myTeamLow = myTeam.toLowerCase().trim();
+      const myNameLow = myName.toLowerCase().trim();
+      
+      const isMyMatch = (
+        (myTeamLow && (p1Low === myTeamLow || p2Low === myTeamLow)) ||
+        (myNameLow && (p1Low === myNameLow || p2Low === myNameLow))
+      );
+      if (!isMyMatch) return false;
+      
+      try {
+        const matchTimeMs = new Date(`${match.date}T${match.time}:00`).getTime();
+        if (isNaN(matchTimeMs)) return false;
+        
+        // Match must be on or after scheduled time
+        if (now < matchTimeMs) return false;
+        
+        // Both players must be online
+        const p1Profile = getPlayerProfileByTeamOrName(match.player1);
+        const p2Profile = getPlayerProfileByTeamOrName(match.player2);
+        
+        const isP1Me = p1Low === myTeamLow || p1Low === myNameLow;
+        const isP2Me = p2Low === myTeamLow || p2Low === myNameLow;
+        
+        const p1Online = isP1Me ? true : (p1Profile ? isPlayerOnline(p1Profile.lastActive) : false);
+        const p2Online = isP2Me ? true : (p2Profile ? isPlayerOnline(p2Profile.lastActive) : false);
+        
+        return p1Online && p2Online;
+      } catch {
+        return false;
+      }
+    });
+  }, [digitalTournamentMatches, allPlayerProfiles, playerTeamName, userProfile]);
+
+  // Automated Match Draw Logic: automatically mark matches as draw after 30 minutes from match time
+  useEffect(() => {
+    if (digitalTournamentMatches.length === 0) return;
+    
+    const now = Date.now();
+    const thirtyMinutesMs = 30 * 60 * 1000;
+    
+    digitalTournamentMatches.forEach(async (match) => {
+      if (match.status !== 'scheduled') return;
+      if (!match.date || !match.time) return;
+      
+      try {
+        const matchTimeMs = new Date(`${match.date}T${match.time}:00`).getTime();
+        if (isNaN(matchTimeMs)) return;
+        
+        // If more than 30 minutes have passed since match time
+        if (now > matchTimeMs + thirtyMinutesMs) {
+          console.log(`Auto-drawing match: ${match.id} (Scheduled: ${match.date} ${match.time})`);
+          
+          // Update status to completed and winner to 'Tie'
+          const matchRef = doc(db, 'digitalTournamentMatches', match.id);
+          await setDoc(matchRef, {
+            status: 'completed',
+            winner: 'Tie',
+            player1Runs: 0,
+            player2Runs: 0,
+            player1Balls: 0,
+            player2Balls: 0,
+            player1Conceded: 0,
+            player2Conceded: 0,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      } catch (err) {
+        console.error(`Error auto-drawing match ${match.id}:`, err);
+      }
+    });
+  }, [digitalTournamentMatches]);
 
   const isPlayerLogin = userProfile?.uid && userProfile.uid.startsWith('player_');
   const playerDocId = isPlayerLogin ? userProfile.uid.replace('player_', '').toLowerCase() : '';
@@ -970,6 +1093,41 @@ export default function App() {
 
       {/* Main Container Viewport */}
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-6">
+        {activeIncomingMatch && (
+          <div className="mb-6 animate-in fade-in slide-in-from-top-4 duration-300">
+            <div 
+              onClick={() => {
+                setTournamentType('digital');
+                setActiveTab('game');
+                setPreselectedTournamentMatchId(activeIncomingMatch.id);
+              }}
+              className="bg-gradient-to-r from-orange-500/90 via-red-600/90 to-purple-600/90 hover:brightness-105 text-white p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row items-center justify-between gap-4 cursor-pointer border border-orange-500/30 transition-all hover:scale-[1.01] group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-white/10 rounded-xl flex-shrink-0">
+                  <Zap className="w-5 h-5 text-yellow-300 animate-pulse" />
+                </div>
+                <div>
+                  <span className="inline-block bg-yellow-400 text-slate-900 font-mono text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider mb-1">
+                    YOUR MATCH IS LIVE ⚡
+                  </span>
+                  <p className="text-sm font-bold text-slate-100">
+                    <span className="text-orange-300 font-display font-black">{activeIncomingMatch.player1}</span> 
+                    <span className="mx-2 text-white/50 font-mono text-xs">VS</span> 
+                    <span className="text-orange-300 font-display font-black">{activeIncomingMatch.player2}</span>
+                  </p>
+                  <p className="text-xs text-white/80 font-mono mt-0.5">
+                    Both players are online and match time is active! Click here to enter play game arena.
+                  </p>
+                </div>
+              </div>
+              <span className="bg-white text-orange-600 font-display font-black text-[10px] uppercase tracking-wider px-3 py-2 rounded-lg flex items-center gap-1 group-hover:gap-1.5 transition-all">
+                Play Game <ArrowRight className="w-3.5 h-3.5" />
+              </span>
+            </div>
+          </div>
+        )}
+
         {tournamentType === 'registration' ? (
           <RegistrationSection userProfile={userProfile} isAdmin={isAdmin} schoolyardLocked={schoolyardLocked} />
         ) : tournamentType === 'schoolyard' ? (
@@ -1151,6 +1309,8 @@ export default function App() {
                   onGameSaved={() => {
                     // trigger points re-sync if desired
                   }} 
+                  preselectedTournamentMatchId={preselectedTournamentMatchId}
+                  clearPreselectedTournamentMatch={() => setPreselectedTournamentMatchId(null)}
                 />
               )}
               {activeTab === 'digital_league' && (
@@ -1159,6 +1319,7 @@ export default function App() {
                   digitalTournamentMatches={digitalTournamentMatches}
                   isAdmin={isAdmin}
                   setActiveTab={setActiveTab}
+                  setPreselectedTournamentMatchId={setPreselectedTournamentMatchId}
                 />
               )}
               {activeTab === 'rules' && (

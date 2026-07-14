@@ -66,7 +66,9 @@ export default function DigitalGameSection({
   digitalTournamentMatches,
   activeChallengeId, 
   setActiveChallengeId, 
-  onGameSaved 
+  onGameSaved,
+  preselectedTournamentMatchId,
+  clearPreselectedTournamentMatch
 }: DigitalGameProps) {
   const hasRegisteredTeam = !!(playerTeamName && playerTeamName.trim() !== '');
 
@@ -168,6 +170,67 @@ export default function DigitalGameSection({
     return () => unsub();
   }, [userProfile]);
 
+  const isPlayerOnline = (lastActive: string | null) => {
+    if (!lastActive) return false;
+    try {
+      const diff = Date.now() - new Date(lastActive).getTime();
+      return diff < 30000; // 30 seconds
+    } catch {
+      return false;
+    }
+  };
+
+  const getPlayerOnlineStatusByNameOrTeam = (nameOrTeam: string): boolean => {
+    if (!nameOrTeam) return false;
+    const nameLow = nameOrTeam.toLowerCase().trim();
+    
+    // Check if it's the current player
+    const myName = (userProfile?.displayName || '').toLowerCase().trim();
+    const myTeam = (playerTeamName || '').toLowerCase().trim();
+    if (myName === nameLow || myTeam === nameLow) {
+      return true;
+    }
+    
+    // Find the player in registeredPlayers
+    const found = registeredPlayers.find(p => {
+      const pNameLow = (p.name || '').toLowerCase().trim();
+      const pTeamLow = (p.teamName || '').toLowerCase().trim();
+      return pNameLow === nameLow || pTeamLow === nameLow;
+    });
+    
+    if (found) {
+      return isPlayerOnline(found.lastActive);
+    }
+    return false;
+  };
+
+  const checkTournamentMatchPlayable = (match: any) => {
+    if (!match) return { playable: false, reason: 'No match selected' };
+    if (match.status !== 'scheduled') return { playable: false, reason: 'Match is already completed or drawn' };
+    
+    const p1Online = getPlayerOnlineStatusByNameOrTeam(match.player1);
+    const p2Online = getPlayerOnlineStatusByNameOrTeam(match.player2);
+    
+    if (!p1Online || !p2Online) {
+      const offlinePlayer = !p1Online ? match.player1 : match.player2;
+      return { playable: false, reason: `Waiting for players to be online (${offlinePlayer} is offline)` };
+    }
+    
+    if (!match.date || !match.time) return { playable: false, reason: 'Match time is not scheduled' };
+    
+    try {
+      const matchTimeMs = new Date(`${match.date}T${match.time}:00`).getTime();
+      if (isNaN(matchTimeMs)) return { playable: false, reason: 'Invalid match schedule' };
+      if (Date.now() < matchTimeMs) {
+        return { playable: false, reason: `Match scheduled for ${match.date} ${formatTimeTo12Hour(match.time)}` };
+      }
+    } catch {
+      return { playable: false, reason: 'Error parsing match schedule' };
+    }
+    
+    return { playable: true, reason: '' };
+  };
+
   // Update player2Name based on opponentType, selectedOpponent, and difficulty
   useEffect(() => {
     if (opponentType === 'registered' && selectedOpponent) {
@@ -190,6 +253,20 @@ export default function DigitalGameSection({
       setSelectedTournamentMatch(null);
     }
   }, [opponentType, myScheduledMatches, selectedTournamentMatch]);
+
+  // Handle preselected tournament match redirect
+  useEffect(() => {
+    if (preselectedTournamentMatchId) {
+      setOpponentType('tournament');
+      const foundMatch = (digitalTournamentMatches || []).find(m => m.id === preselectedTournamentMatchId);
+      if (foundMatch) {
+        setSelectedTournamentMatch(foundMatch);
+      }
+      if (clearPreselectedTournamentMatch) {
+        clearPreselectedTournamentMatch();
+      }
+    }
+  }, [preselectedTournamentMatchId, digitalTournamentMatches]);
 
   useEffect(() => {
     if (userProfile) {
@@ -1770,17 +1847,23 @@ export default function DigitalGameSection({
             onClick={startToss}
             disabled={
               (opponentType === 'registered' && registeredPlayers.length === 0) ||
-              (opponentType === 'tournament' && myScheduledMatches.length === 0)
+              (opponentType === 'tournament' && (myScheduledMatches.length === 0 || !checkTournamentMatchPlayable(selectedTournamentMatch).playable))
             }
             className={`w-full text-white font-display font-black text-sm uppercase py-4 rounded-xl flex items-center justify-center gap-2 transition-all duration-100 cursor-pointer ${
               (opponentType === 'registered' && registeredPlayers.length === 0) ||
-              (opponentType === 'tournament' && myScheduledMatches.length === 0)
+              (opponentType === 'tournament' && (myScheduledMatches.length === 0 || !checkTournamentMatchPlayable(selectedTournamentMatch).playable))
                 ? 'bg-slate-700/50 border border-slate-700 text-slate-500 cursor-not-allowed shadow-none'
                 : 'bg-gradient-to-r from-orange-500 to-red-600 shadow-[0_4px_0_0_#9a3412] active:translate-y-1 active:shadow-none'
             }`}
           >
-            <Play className="w-4 h-4 fill-current" /> Start Toss
+            <Play className="w-4 h-4 fill-current" /> {opponentType === 'tournament' && selectedTournamentMatch && !checkTournamentMatchPlayable(selectedTournamentMatch).playable ? 'Match Locked' : 'Start Toss'}
           </button>
+
+          {opponentType === 'tournament' && selectedTournamentMatch && !checkTournamentMatchPlayable(selectedTournamentMatch).playable && (
+            <p className="text-center text-xs font-mono font-semibold text-red-400 mt-2 animate-pulse flex items-center justify-center gap-1.5">
+              <span>🔒</span> {checkTournamentMatchPlayable(selectedTournamentMatch).reason}
+            </p>
+          )}
         </div>
       )}
 
@@ -2262,4 +2345,6 @@ interface DigitalGameProps {
   activeChallengeId?: string | null;
   setActiveChallengeId?: (id: string | null) => void;
   onGameSaved: () => void;
+  preselectedTournamentMatchId?: string | null;
+  clearPreselectedTournamentMatch?: () => void;
 }

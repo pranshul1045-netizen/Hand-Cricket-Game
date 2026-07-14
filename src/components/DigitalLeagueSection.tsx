@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Trophy, Shield, Search, ArrowRight, User, Trash2, Gamepad2, Flame, Users } from 'lucide-react';
+import { Calendar, Plus, Trophy, Shield, Search, ArrowRight, User, Trash2, Gamepad2, Flame, Users, Lock } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { doc, setDoc, deleteDoc, collection, onSnapshot } from 'firebase/firestore';
 import { DigitalTournamentMatch, UserProfile, formatGroupName } from '../types';
@@ -45,6 +45,7 @@ interface DigitalLeagueSectionProps {
   onAddMatch?: (newMatch: DigitalTournamentMatch) => void;
   onDeleteMatch?: (matchId: string) => void;
   setActiveTab?: (tab: 'dashboard' | 'game' | 'league' | 'rules' | 'updates' | 'digital_home' | 'digital_league') => void;
+  setPreselectedTournamentMatchId?: (matchId: string | null) => void;
 }
 
 export default function DigitalLeagueSection({ 
@@ -54,7 +55,8 @@ export default function DigitalLeagueSection({
   digitalTournamentLocked, 
   onAddMatch, 
   onDeleteMatch,
-  setActiveTab 
+  setActiveTab,
+  setPreselectedTournamentMatchId
 }: DigitalLeagueSectionProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
@@ -406,28 +408,39 @@ export default function DigitalLeagueSection({
                   {/* Actions Area */}
                   <div className="flex md:flex-col items-stretch justify-center gap-2 min-w-[140px] md:border-l md:border-slate-800 md:pl-4">
                     {amIInMatch ? (
-                      <button
-                        onClick={() => {
-                          if (setActiveTab) {
-                            setActiveTab('game');
-                          }
-                        }}
-                        className="w-full bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white font-display font-black text-xs uppercase py-3 px-4 rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-orange-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
-                      >
-                        <Gamepad2 className="w-4 h-4 text-white animate-bounce" />
-                        Play Live Duel
-                      </button>
+                      p1Online && p2Online ? (
+                        <button
+                          onClick={() => {
+                            if (setPreselectedTournamentMatchId) {
+                              setPreselectedTournamentMatchId(match.id);
+                            }
+                            if (setActiveTab) {
+                              setActiveTab('game');
+                            }
+                          }}
+                          className="w-full bg-gradient-to-r from-orange-500 to-rose-600 hover:from-orange-600 hover:to-rose-700 text-white font-display font-black text-xs uppercase py-3 px-4 rounded-xl flex items-center justify-center gap-1.5 shadow-lg shadow-orange-500/20 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                        >
+                          <Gamepad2 className="w-4 h-4 text-white animate-bounce" />
+                          Play Live Duel
+                        </button>
+                      ) : (
+                        <button
+                          disabled
+                          className="w-full bg-slate-800/50 border border-slate-700/60 text-slate-500 font-display font-black text-xs uppercase py-3 px-4 rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed"
+                          title="Both players must be online to play this match"
+                        >
+                          <Lock className="w-4 h-4 text-slate-500" />
+                          Play (Locked)
+                        </button>
+                      )
                     ) : (
                       <button
-                        onClick={() => {
-                          if (setActiveTab) {
-                            setActiveTab('game');
-                          }
-                        }}
-                        className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-mono text-[10px] font-bold uppercase py-2.5 px-3 rounded-lg flex items-center justify-center gap-1.5 border border-slate-700 transition-all cursor-pointer"
+                        disabled
+                        className="w-full bg-slate-900 border border-slate-800 text-slate-600 font-mono text-[10px] font-bold uppercase py-2.5 px-3 rounded-lg flex items-center justify-center gap-1.5 cursor-not-allowed"
+                        title="You are not a player in this match"
                       >
-                        <ArrowRight className="w-3.5 h-3.5" />
-                        Enter Game Arena
+                        <Lock className="w-3.5 h-3.5 text-slate-600" />
+                        Locked
                       </button>
                     )}
                   </div>
